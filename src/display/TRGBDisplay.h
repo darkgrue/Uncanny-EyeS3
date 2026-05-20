@@ -1,10 +1,8 @@
 #ifndef TRGB_DISPLAY_H
 #define TRGB_DISPLAY_H
 
-#include "DisplayHAL.h"
-#include <esp_lcd_panel_rgb.h>
-#include <esp_lcd_panel_ops.h>
-#include <driver/gpio.h>
+#include "common/DisplayHAL.h"
+#include <Arduino_GFX_Library.h>
 
 class TRGBDisplay : public DisplayHAL {
 public:
@@ -27,18 +25,14 @@ public:
     bool needsFlush() const override { return true; }
     void flush() override;
 
-private:
-    void resetDisplay();
-    void initST7701S();
-    void initBus();
-    void writeCommand(uint8_t cmd);
-    void writeData(const uint8_t* data, size_t len);
+    void drawString(int16_t x, int16_t y, const char* str, uint16_t color = 0xFFFF) override;
 
-    esp_lcd_panel_handle_t m_panelDrv;
-    uint16_t* m_framebuffer;
+private:
+    Arduino_DataBus *bus = nullptr;       // Managed by Arduino_GFX library
+    Arduino_ESP32RGBPanel *rgbpanel = nullptr;  // Managed by Arduino_GFX library
+    Arduino_RGB_Display *gfx = nullptr;  // Managed by Arduino_GFX library
     int m_width = 480;
     int m_height = 480;
-    bool m_backlightOn = false;
     bool m_initialized = false;
 };
 

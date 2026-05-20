@@ -1,7 +1,7 @@
-﻿#ifndef BLINK_FSM_H
+#ifndef BLINK_FSM_H
 #define BLINK_FSM_H
 
-#include "EyeState.h"
+#include "common/EyeState.h"
 
 // Finite State Machine for eye blink animation
 // Mirrors the M4_Eyes blink behavior

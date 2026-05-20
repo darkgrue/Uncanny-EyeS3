@@ -1,15 +1,13 @@
 #include "WiiChuck.h"
+#include "config/BoardPins.h"
 #include <Arduino.h>
-
-#define WIICHUCK_SDA 21
-#define WIICHUCK_SCL 22
 
 WiiChuckInput::WiiChuckInput(uint8_t address) 
     : m_address(address) {
 }
 
 bool WiiChuckInput::begin() {
-    Wire.begin(WIICHUCK_SDA, WIICHUCK_SCL);
+    Wire.begin(BOARD_I2C_SDA, BOARD_I2C_SCL);
     Wire.setClock(400000);
     
     // Initialize controller

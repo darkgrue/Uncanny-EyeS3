@@ -1,9 +1,15 @@
 ﻿#ifndef EYE_SYNC_H
 #define EYE_SYNC_H
 
-#include "EyeState.h"
+#include "common/EyeState.h"
 #include <esp_now.h>
 #include <WiFi.h>
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#define ESP_NOW_NEW_API 1
+#else
+#define ESP_NOW_NEW_API 0
+#endif
 
 // Callback types for network events
 typedef void (*OnPeerJoined)(const uint8_t* mac);
@@ -43,8 +49,13 @@ public:
 
 private:
     static EyeSyncManager* s_instance;
-    static void onDataSent(const esp_now_send_info_t* tx_info, esp_now_send_status_t status);
+#if ESP_NOW_NEW_API
+    static void onDataSent(const wifi_tx_info_t* tx_info, esp_now_send_status_t status);
     static void onDataReceived(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
+#else
+    static void onDataSent(const uint8_t* mac_addr, esp_now_send_status_t status);
+    static void onDataReceived(const uint8_t* mac, const uint8_t* data, int data_len);
+#endif
 
     bool m_initialized = false;
     bool m_hasController = false;

@@ -1,7 +1,7 @@
 #ifndef INPUT_BASE_H
 #define INPUT_BASE_H
 
-#include "EyeState.h"
+#include "common/EyeState.h"
 
 // Base class for all input devices
 class InputBase {

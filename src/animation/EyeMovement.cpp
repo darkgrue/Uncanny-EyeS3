@@ -18,9 +18,24 @@ void EyeMovement::setTarget(float x, float y) {
         x = (x / r) * m_boundsRadius;
         y = (y / r) * m_boundsRadius;
     }
-    
+
     m_targetX = x;
     m_targetY = y;
+
+    // If user sets a target, we're no longer idle
+    if (r > 0.01f) {
+        m_idle = false;
+    }
+}
+
+void EyeMovement::setTargetAcquired() {
+    m_lastTrackTime = millis();
+    m_idle = true;
+}
+
+void EyeMovement::setTargetLost() {
+    m_lastTrackTime = millis();
+    m_idle = true;
 }
 
 void EyeMovement::setRandomDuration(uint32_t minMs, uint32_t maxMs) {
@@ -60,7 +75,17 @@ void EyeMovement::moveTo(float x, float y, uint32_t durationMs) {
 bool EyeMovement::update(uint32_t dt) {
     if (!m_moving) {
         if (m_randomMode) {
-            startRandomMove();
+            if (m_idle) {
+                // Wait for saccade delay after losing target
+                uint32_t now = millis();
+                if (now - m_lastTrackTime >= m_saccadeDelayAfterTrack) {
+                    m_idle = false;
+                    startRandomMove();
+                }
+                return false;
+            } else {
+                startRandomMove();
+            }
         }
         return false;
     }

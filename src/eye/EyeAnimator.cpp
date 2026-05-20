@@ -1,4 +1,5 @@
 #include "EyeAnimator.h"
+#include "EyeLibrary.h"
 #include <Arduino.h>
 #include <WiFi.h>
 
@@ -6,6 +7,7 @@ EyeAnimator::EyeAnimator()
     : m_display(nullptr)
     , m_input(nullptr)
     , m_sync(nullptr)
+    , m_eyeDef(nullptr)
     , m_lightSensorPin(-1)
     , m_lastLightRead(0)
     , m_booped(false)
@@ -13,29 +15,18 @@ EyeAnimator::EyeAnimator()
     , m_initialized(false) {
 }
 
-bool EyeAnimator::begin(DisplayHAL* display) {
+bool EyeAnimator::begin(DisplayHAL* display, const EyeDefinition& eyeDef) {
     m_display = display;
-    m_displaySize = display->getWidth();
-    if (display->getHeight() < m_displaySize) {
-        m_displaySize = display->getHeight();
-    }
+    m_eyeDef = &eyeDef;
     
-    // Calculate map radius based on display size
-    // Eye radius = displaySize/2, coverage = 0.6 gives good sphere look
-    m_mapRadius = (int)(m_displaySize * 0.4f);  // ~40% of display
-    
-    if (!m_renderer.begin(display, m_displaySize, m_mapRadius)) {
+    if (!m_renderer.begin(display, eyeDef)) {
         return false;
     }
     
-    // Generate default eyelids
-    EyelidData defaultEyelids;
-    generateDefaultEyelids(defaultEyelids, m_displaySize);
-    m_renderer.setEyelidData(defaultEyelids);
-    
-    // Initialize movement system
+// Initialize movement system
     m_movement.setBounds(0.6f);
     m_movement.setRandomDuration(83, 166);
+    m_movement.setSaccadeDelay(2000);  // 2 second delay before resuming idle movement after losing target
     m_movement.startRandomMove();
     
     // Initialize autonomous iris
@@ -48,13 +39,6 @@ bool EyeAnimator::begin(DisplayHAL* display) {
     
     m_initialized = true;
     return true;
-}
-
-void EyeAnimator::setEyeRadius(int radius) {
-    if (radius > 0) {
-        m_mapRadius = (int)(radius * 3.14159f * 0.6f);  // With coverage factor
-        m_renderer.begin(m_display, m_displaySize, m_mapRadius);
-    }
 }
 
 void EyeAnimator::setLightSensor(int pin, uint16_t minVal, uint16_t maxVal, float curve) {
@@ -70,6 +54,22 @@ void EyeAnimator::setLightSensor(int pin, uint16_t minVal, uint16_t maxVal, floa
 void EyeAnimator::setPupilRange(float minPupil, float maxPupil) {
     m_irisMin = minPupil;
     m_irisRange = maxPupil - minPupil;
+}
+
+bool EyeAnimator::setEyeIndex(int index) {
+    if (index < 0 || index >= s_eyeCount) {
+        return false;
+    }
+
+    m_eyeIndex = index;
+    m_eyeDef = s_eyeRegistry[index];
+
+    if (!m_renderer.begin(m_display, *m_eyeDef)) {
+        return false;
+    }
+
+    m_needsRender = true;
+    return true;
 }
 
 void EyeAnimator::update(uint32_t now) {
@@ -105,7 +105,8 @@ void EyeAnimator::update(uint32_t now) {
                 eyesNormal();
             }
         } else if (!m_movement.isMoving() && m_movement.getTargetX() == 0 && m_movement.getTargetY() == 0) {
-            // No input, resume random movement
+            // No input, resume random movement with saccade delay
+            m_movement.setTargetLost();
             m_movement.setRandomMode(true);
         }
     }
@@ -233,19 +234,20 @@ void EyeAnimator::updateIrisAutonomous(uint32_t now) {
 
 void EyeAnimator::processNetworkInput() {
     if (!m_sync || !m_sync->hasController()) return;
-    
+
     // Get interpolated values from network
     uint32_t now = millis();
-    
-    if (m_sync->getLastRemoteTime() > 0 && !m_sync->getLastRemoteState().eyeX == 0) {
+
+    if (m_sync->getLastRemoteTime() > 0 && m_sync->getLastRemoteState().eyeX != 0) {
         float remoteX = m_sync->getLastRemoteState().eyeX;
         float remoteY = m_sync->getLastRemoteState().eyeY;
-        
+
         // Only use network values if they are fresh
         if ((now - m_sync->getLastRemoteTime()) < 100) {
+            m_movement.setTargetAcquired();
             m_movement.setTarget(remoteX, remoteY);
             m_movement.setRandomMode(false);
-            
+
             // Handle commands
             EyeSyncMessage msg = m_sync->getLastRemoteState();
             switch (msg.command) {
@@ -256,28 +258,8 @@ void EyeAnimator::processNetworkInput() {
                 case CMD_NORMAL: eyesNormal(); break;
             }
         }
+    } else {
+        // No fresh network data, start idle delay
+        m_movement.setTargetLost();
     }
-}
-
-bool EyeAnimator::loadIrisTexture(const char* filename) {
-    EyeTexture tex;
-    if (m_renderer.loadTextureFromFile(tex, filename)) {
-        // Would need to expose iris texture set in renderer
-        return true;
-    }
-    return false;
-}
-
-bool EyeAnimator::loadScleraTexture(const char* filename) {
-    EyeTexture tex;
-    if (m_renderer.loadTextureFromFile(tex, filename)) {
-        return true;
-    }
-    return false;
-}
-
-bool EyeAnimator::loadEyelids(const char* upperOpen, const char* upperClosed,
-                              const char* lowerOpen, const char* lowerClosed) {
-    // TODO: Load BMP files for each eyelid state
-    return false;
 }

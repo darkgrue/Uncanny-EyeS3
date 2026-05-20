@@ -9,35 +9,53 @@ TODO: Support for the Gravity Offline Edge AI Gesture & Face Detection Sensor (<
 
 ## Supported Displays
 
-| Display | Resolution | Eye Radius | Map Radius |
-|---------|------------|------------|------------|
-| T-Display S3 AMOLED | 466x466 | 233 | 233 |
-| T-RGB | 480x480 | 240 | 240 |
-| Default (testing) | 240x240 | 120 | 120 |
+| Display | Resolution | Map Radius |
+|---------|------------|------------|
+| T-Display S3 AMOLED | 466x466 | 233 |
+| T-RGB | 480x480 | 240 |
+| Default (testing) | 240x240 | 120 |
+
+**Note:** Eye size is now configured as a fraction of the display's smaller dimension, making eye definitions work across all display sizes without modification.
 
 
 ## Eye Configuration Files
 
-Eye definitions are stored as JSON files (`.eye`) in `resources/eyes/`. Copy `default_eye.eye` to create new eye designs.
+Eye definitions are stored as JSON files (`.eye`) in subdirectories under `resources/eyes/`. Each eye configuration has its own folder containing the `.eye` file and any associated textures.
+
+```
+resources/eyes/
+  default_eye/
+    default_eye.eye   # Eye configuration
+    iris.png          # Optional iris texture (in same folder)
+    sclera.png        # Optional sclera texture (in same folder)
+  another_eye/
+    another_eye.eye
+    upper_lid.png     # Optional custom eyelid shapes
+    lower_lid.png
+```
+
+Copy `default_eye/` to create new eye designs.
 
 
 ### Configuration Format
 
+All size values are expressed as fractions (0.0 to 1.0) relative to the display's smaller dimension. This ensures eye configurations work across all supported display sizes without modification.
+
 ```json
 {
     "name": "eye_name",
-    "radius": 120,
+    "radiusFraction": 0.5,
     "backColor": 31759,
     "tracking": true,
     "squint": 0,
     "pupil": {
         "color": 0,
         "slitRadius": 0,
-        "min": 42,
-        "max": 200
+        "minFraction": 0.35,
+        "maxFraction": 1.67
     },
     "iris": {
-        "radius": 60,
+        "radiusFraction": 0.5,
         "color": 65281,
         "angle": 0,
         "spin": 0,
@@ -62,7 +80,7 @@ Eye definitions are stored as JSON files (`.eye`) in `resources/eyes/`. Copy `de
 
 **Core:**
 - `name`: Eye identifier (used in filename)
-- `radius`: Eye radius in pixels (default: displaySize/2)
+- `radiusFraction`: Eye radius as fraction of smaller screen dimension (default: 0.5 = 50%)
 - `backColor`: Background color behind eye sphere (RGB565)
 - `tracking`: Enable eye tracking (look at cursor)
 - `squint`: Squint amount 0-255
@@ -70,11 +88,11 @@ Eye definitions are stored as JSON files (`.eye`) in `resources/eyes/`. Copy `de
 **Pupil:**
 - `color`: Pupil color (RGB565)
 - `slitRadius`: 0 = round pupil, >0 = slit pupil
-- `min`: Minimum pupil size
-- `max`: Maximum pupil size
+- `minFraction`: Minimum pupil size as fraction of iris radius
+- `maxFraction`: Maximum pupil size as fraction of iris radius
 
 **Iris:**
-- `radius`: Iris radius in pixels
+- `radiusFraction`: Iris radius as fraction of eye radius
 - `color`: Iris color (RGB565)
 - `angle`: Initial rotation (0-1023)
 - `spin`: Continuous spin rate
@@ -94,61 +112,75 @@ Eye definitions are stored as JSON files (`.eye`) in `resources/eyes/`. Copy `de
 
 ## Generating Eye Headers
 
-Run `tablegen.py` to generate C++ header files from `.eye` configurations:
+Run `tablegen.py` to generate C++ header files from `.eye` configurations. The same `.eye` file uses fractional values that work across all display sizes, but you need to generate headers for each target display to get the appropriate polar map tables.
 
 ```bash
-# Generate for all eyes in resources/eyes/
+# Generate for all eyes in resources/eyes/ subdirectories
 python resources/eyes/tablegen.py include/ --all amoled
 python resources/eyes/tablegen.py include/ --all trgb
 
 # Generate for a specific eye
-python resources/eyes/tablegen.py include/ resources/eyes/default_eye.eye amoled
+python resources/eyes/tablegen.py include/ resources/eyes/default_eye/default_eye.eye amoled
 ```
+
+The script discovers all `.eye` files recursively in `resources/eyes/` subdirectories. Image paths in config files are resolved relative to the `.eye` file's directory, so textures can be placed in the same folder.
 
 
 ### Output Location
 
-Generated headers go into `include/` and are named by display type:
+Generated headers go into `include/` and are named by display type. The header contains the precomputed polar maps and displacement tables specific to each display size:
 - `eye_name_466.h` for AMOLED (466x466)
 - `eye_name_480.h` for T-RGB (480x480)
 - `eye_name_240.h` for default (240x240)
 
 
-## Custom Textures
-
-To use image textures for iris or sclera, add texture file paths to the config:
-
-```json
-{
-    "iris": {
-        "filename": "resources/eyes/iris_texture.png",
-        "radius": 60,
-        "color": 65281
-    },
-    "sclera": {
-        "filename": "resources/eyes/sclera_texture.png"
-    }
-}
-```
-
-Supported formats: PNG, BMP (24-bit RGB). Images are converted to RGB565 automatically.
-
-
 ## Custom Eyelid Shapes
 
-Eyelid shapes are defined by grayscale images where white = eyelid, black = eye visible:
+Eyelid shapes are defined by grayscale images where white = eyelid, black = eye visible. Place images in the same directory as the `.eye` config:
 
 ```json
 {
     "eyelid": {
-        "upper": "resources/eyes/upper_lid.png",
-        "lower": "resources/eyes/lower_lid.png",
+        "upper": "upper_lid.png",
+        "lower": "lower_lid.png",
         "color": 0
     }
 }
 ```
 
-Images must match display resolution (466x466 for AMOLED, 480x480 for T-RGB).
+**Resolution Requirements:**
+- Images **must** match the target display resolution exactly
+- For AMOLED (466x466): use 466x466 pixel images
+- For T-RGB (480x480): use 480x480 pixel images
+- The generator rejects mismatched sizes to prevent visual artifacts
+
+
+## Custom Textures (Iris/Sclera)
+
+Image textures for iris or sclera are placed in the same directory as the `.eye` config and referenced with relative paths:
+
+```json
+{
+    "iris": {
+        "filename": "iris_texture.png",
+        "radiusFraction": 0.5,
+        "color": 65281
+    },
+    "sclera": {
+        "filename": "sclera_texture.png"
+    }
+}
+```
+
+**Supported formats:** PNG, BMP (24-bit RGB). Images are converted to RGB565 automatically.
+
+**Resolution Recommendations:**
+- Texture images can be any size but should approximate the rendered pixel size for best quality
+- With default `radiusFraction: 0.5` and `iris.radiusFraction: 0.5`:
+  - AMOLED (466x466): iris renders at ~233 pixels diameter
+  - T-RGB (480x480): iris renders at ~240 pixels diameter
+- Size textures to match these rendered dimensions (233x233 or 240x240 respectively)
+- The same `.eye` config works across all displays (uses fractional sizing), but you generate separate headers per display type
 
 
 ## Building
@@ -164,6 +196,95 @@ pio run -e trgb
 pio run -e amoled --target upload
 ```
 
+
+## Runtime Eye Switching
+
+Eyes can be switched at runtime via serial commands without recompiling.
+
+### Serial Commands
+
+| Command | Description |
+|---------|-------------|
+| `E0` | Switch to first eye (default_eye) |
+| `E1` | Switch to second eye (eagle) |
+| `E<n>` | Switch to eye at index n |
+
+### How It Works
+
+Eye definitions are registered in `include/EyeLibrary.h` which provides:
+- `s_eyeRegistry[]` - array of available eye definitions
+- `s_eyeCount` - total number of eyes
+- `getEyeName(index)` - returns eye name string
+
+When you send `E1` via serial, the command is parsed in `loop()`:
+```cpp
+while (Serial.available()) {
+    char c = Serial.read();
+    if (c == 'E') {
+        int eyeIndex = Serial.parseInt();
+        if (eyeIndex >= 0 && eyeIndex < s_eyeCount) {
+            switchEye(eyeIndex);
+        }
+    }
+}
+```
+
+The `switchEye()` function calls `EyeAnimator::setEyeIndex()` which:
+1. Validates the index
+2. Updates `m_eyeDef` to point to the new eye
+3. Reinitializes the renderer with the new eye definition
+4. Sets `m_needsRender = true` to trigger a refresh
+
+### Adding New Eyes
+
+**Important:** Each eye configuration requires headers for **both** display types (466 and 480) because the polar map tables and displacement maps are resolution-specific. The same `.eye` config uses fractional sizing that works across all displays, but the generated C++ headers contain precomputed tables for a specific resolution.
+
+1. **Create eye config** in `resources/eyes/<name>/<name>.eye`
+   - Use fractional values (0.0-1.0) for radius and sizing to work across display sizes
+   - Reference texture files (PNG/BMP) with relative paths in the same directory
+   - Reference eyelid images (grayscale) with relative paths for custom shapes
+
+2. **Generate headers for both displays:**
+   ```bash
+   # Generate for AMOLED (466x466)
+   python resources/eyes/tablegen.py include/ resources/eyes/<name>/<name>.eye amoled
+
+   # Generate for T-RGB (480x480)
+   python resources/eyes/tablegen.py include/ resources/eyes/<name>/<name>.eye trgb
+   ```
+   This creates:
+   - `include/<name>_466.h` for AMOLED
+   - `include/<name>_480.h` for T-RGB
+
+3. **Add to EyeLibrary.h registry** under the appropriate display section:
+   ```cpp
+   #if defined(ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED)
+       #include "<name>_466.h"  // AMOLED header
+
+       static const EyeDefinition* const s_eyeRegistry[] = {
+           &default_eye::eye,
+           &eagle::eye,
+           &<name>::eye  // Add your eye here
+       };
+       static constexpr int s_eyeCount = 3;
+
+   #elif defined(ARDUINO_LILYGO_T_RGB)
+       #include "<name>_480.h"  // T-RGB header
+
+       static const EyeDefinition* const s_eyeRegistry[] = {
+           &default_eye::eye,
+           &eagle::eye,
+           &<name>::eye  // Add your eye here
+       };
+       static constexpr int s_eyeCount = 3;
+   #endif
+   ```
+
+**Build and test:**
+```bash
+pio run -e amoled   # Test on AMOLED 466x466
+pio run -e trgb     # Test on T-RGB 480x480
+```
 
 ## WiiChuck Controller Connection
 
@@ -321,10 +442,11 @@ When multiple eyes are running (connected via ESP-NOW), the eye with an **active
 
 ```
 resources/eyes/
-  tablegen.py       # Eye data generator
-  default_eye.eye   # Sample eye configuration
-  *.eye             # Your custom eye configs
-  *.png             # Texture images (optional)
+  tablegen.py         # Eye data generator
+  default_eye/
+    default_eye.eye  # Sample eye configuration
+  another_eye/
+    another_eye.eye  # Custom eye configuration
 
 include/
   *_466.h          # Generated AMOLED eye headers

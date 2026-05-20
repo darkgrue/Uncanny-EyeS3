@@ -1,21 +1,22 @@
 #ifndef EYE_ANIMATOR_H
 #define EYE_ANIMATOR_H
 
-#include "EyeState.h"
+#include "common/EyeState.h"
 #include "EyeConfig.h"
 #include "EyeRenderer.h"
-#include "BlinkFSM.h"
-#include "EyeMovement.h"
-#include "DisplayHAL.h"
-#include "InputBase.h"
+#include "animation/BlinkFSM.h"
+#include "animation/EyeMovement.h"
+#include "common/DisplayHAL.h"
+#include "input/InputBase.h"
 #include "network/EyeSync.h"
+#include "eyes.h"
 
 class EyeAnimator {
 public:
     EyeAnimator();
     
-    // Initialize with display
-    bool begin(DisplayHAL* display);
+    // Initialize with display and eye definition (uses precomputed tables)
+    bool begin(DisplayHAL* display, const EyeDefinition& eyeDef);
     
     // Set input sources
     void setInput(InputBase* input) { m_input = input; }
@@ -23,17 +24,7 @@ public:
     // Set network sync (can be nullptr if solo)
     void setSyncManager(EyeSyncManager* sync) { m_sync = sync; }
     
-    // Load custom textures
-    bool loadIrisTexture(const char* filename);
-    bool loadScleraTexture(const char* filename);
-    
-    // Load custom eyelid data
-    bool loadEyelids(const char* upperOpen, const char* upperClosed,
-                    const char* lowerOpen, const char* lowerClosed);
-    
     // Configuration
-    void setEyeRadius(int radius);
-    void setIrisRadius(int radius) { m_irisRadius = radius; }
     void setLightSensor(int pin, uint16_t minVal, uint16_t maxVal, float curve = 1.0f);
     void setPupilRange(float minPupil, float maxPupil);
     
@@ -65,7 +56,10 @@ public:
     void eyesBoop() { m_booped = true; }
     void eyesClose() { m_blink.close(); }
     void eyesNormal() { m_blink.normal(); m_movement.setRandomMode(true); }
-    void eyesWide() { m_blink.wide(); }
+void eyesWide() { m_blink.wide(); }
+
+    int getEyeIndex() const { return m_eyeIndex; }
+    bool setEyeIndex(int index);
 
 private:
     void updateLightSensor(uint32_t now);
@@ -76,14 +70,13 @@ private:
     InputBase* m_input = nullptr;
     EyeSyncManager* m_sync = nullptr;
     
+    // Eye definition reference (must persist during rendering)
+    const EyeDefinition* m_eyeDef = nullptr;
+    int m_eyeIndex = 0;
+    
     EyeRenderer m_renderer;
     EyeMovement m_movement;
     BlinkFSM m_blink;
-    
-    // Display configuration
-    int m_displaySize = 0;
-    int m_mapRadius = 0;
-    int m_irisRadius = 60;
     
     // Light sensor
     int m_lightSensorPin = -1;

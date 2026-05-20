@@ -1,7 +1,7 @@
-﻿#ifndef EYE_MOVEMENT_H
+#ifndef EYE_MOVEMENT_H
 #define EYE_MOVEMENT_H
 
-#include "EyeState.h"
+#include "common/EyeState.h"
 
 // Handles smooth eye movement with easing
 class EyeMovement {
@@ -19,6 +19,18 @@ public:
     
     // Enable/disable random movement
     void setRandomMode(bool enabled);
+    
+    // Set delay before starting random movement after losing target
+    void setSaccadeDelay(uint32_t ms) { m_saccadeDelayAfterTrack = ms; }
+    
+    // Notify that a target is acquired (resets idle timer)
+    void setTargetAcquired();
+    
+    // Notify that target is lost (starts idle delay countdown)
+    void setTargetLost();
+    
+    // Check if currently in idle mode (no target, waiting for saccade delay)
+    bool isIdle() const { return m_idle; }
     
     // Update movement, returns true if eye moved
     // dt = micros() since last update
@@ -58,8 +70,12 @@ private:
     uint32_t m_moveStartTime = 0;
     uint32_t m_moveDuration = 0;
     
-    uint32_t m_minDuration = 83;     // ~1/12 sec
+uint32_t m_minDuration = 83;     // ~1/12 sec
     uint32_t m_maxDuration = 166;    // ~1/6 sec
+    
+    uint32_t m_saccadeDelayAfterTrack = 2000;  // Delay before starting random movement after losing target
+    uint32_t m_lastTrackTime = 0;             // Timestamp of last valid target
+    bool m_idle = false;                       // True when waiting for saccade delay after losing target
 };
 
 #endif // EYE_MOVEMENT_H
