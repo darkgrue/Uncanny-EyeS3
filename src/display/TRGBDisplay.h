@@ -40,11 +40,16 @@ public:
     bool writePixelsAsync(uint16_t *pixels, size_t count) override { return true; }
     bool endAsyncTransfer() override { return true; }
     bool isAsyncTransferComplete() override { return true; }
+    bool waitForAsyncTransfer(uint32_t timeoutMs) override { (void)timeoutMs; return true; }
 
     // Software sync for render/display overlap (stubbed for RGB panel)
     bool beginDisplayTransfer() override { return true; }
     void endDisplayTransfer() override {}
     bool isTransferComplete() override { return true; }
+
+    // Direct bulk transfer - implemented in cpp file
+    void directTransfer(uint16_t* buffer, int destX, int destY,
+                        int srcX, int srcY, int srcW, int srcH) override;
 
 private:
     Arduino_DataBus *bus = nullptr;       // Managed by Arduino_GFX library

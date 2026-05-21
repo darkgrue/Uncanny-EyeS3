@@ -69,12 +69,13 @@ private:
   // Background color for clearing
   uint16_t m_backgroundColor = 0x0000;
 
-  // Transfer sync flag
-  bool m_transferInProgress;
-  int64_t m_lastTransferTime;
-
   // Precomputed circular clipping bounds
   CircularClip m_clip;
+
+  // Pre-allocated scratch buffer for display transfers (avoids heap per-frame)
+  // Sized for maximum single transfer: full display width * height
+  static constexpr int SCRATCH_BUF_SIZE = 466 * 466;
+  uint16_t* m_scratchBuf = nullptr;
 };
 
 #endif // EYE_RENDERER_H

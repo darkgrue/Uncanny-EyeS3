@@ -45,11 +45,13 @@ public:
     virtual void startWrite() = 0;
     virtual void endWrite() = 0;
 
-    // Async transfer support - split transfer into phases for render/transfer overlap
-    virtual bool beginAsyncTransfer() = 0;
-    virtual bool writePixelsAsync(uint16_t *pixels, size_t count) = 0;
-    virtual bool endAsyncTransfer() = 0;
-    virtual bool isAsyncTransferComplete() = 0;
+    // Async transfer support - for render/transfer overlap
+    // Default implementations for displays that don't need async
+    virtual bool beginAsyncTransfer() { return true; }
+    virtual bool writePixelsAsync(uint16_t*, size_t) { return true; }
+    virtual bool endAsyncTransfer() { return true; }
+    virtual bool isAsyncTransferComplete() { return true; }
+    virtual bool waitForAsyncTransfer(uint32_t) { return true; }
 
     // Draw text at position
     virtual void drawString(int16_t x, int16_t y, const char* str, uint16_t color = 0xFFFF) = 0;
@@ -69,6 +71,23 @@ public:
     virtual bool beginDisplayTransfer() = 0;
     virtual void endDisplayTransfer() = 0;
     virtual bool isTransferComplete() = 0;
+
+    // Direct bulk transfer for maximum throughput (bypasses GFX library)
+    virtual void directTransfer(uint16_t* buffer, int destX, int destY,
+                                 int srcX, int srcY, int srcW, int srcH) = 0;
+
+    // Async version of directTransfer - default impl just calls sync version
+    virtual void directTransferAsync(uint16_t* buffer, int destX, int destY,
+                                      int srcX, int srcY, int srcW, int srcH) {
+        directTransfer(buffer, destX, destY, srcX, srcY, srcW, srcH);
+    }
+
+    // Chunked async transfer - default returns false (sync fallback)
+    virtual bool directTransferChunkedAsync(uint16_t* buffer, int destX, int destY,
+                                            int srcX, int srcY, int srcW, int srcH) {
+        (void)buffer; (void)destX; (void)destY; (void)srcX; (void)srcY; (void)srcW; (void)srcH;
+        return false;
+    }
 };
 
 #endif // DISPLAY_HAL_H

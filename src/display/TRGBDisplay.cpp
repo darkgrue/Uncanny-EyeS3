@@ -126,6 +126,31 @@ void TRGBDisplay::drawRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t 
     }
 }
 
+// Direct bulk transfer using framebuffer memcpy - much faster than drawRGBBitmap
+// For RGB panel, we can copy directly to the PSRAM framebuffer
+void TRGBDisplay::directTransfer(uint16_t* buffer, int destX, int destY,
+                                  int srcX, int srcY, int srcW, int srcH) {
+    if (!gfx || !buffer) return;
+
+    uint16_t* fb = gfx->getFramebuffer();
+    if (!fb) return;
+
+    // Get framebuffer pitch (should be 480 for 480-wide display)
+    int fbWidth = 480;
+    if (gfx) {
+        fbWidth = gfx->width();
+    }
+
+    // Copy row-by-row from source buffer to framebuffer
+    // Source is buffer[srcY + row][srcX] with stride m_width
+    // Dest is fb[destY + row][destX] with stride fbWidth
+    for (int row = 0; row < srcH; row++) {
+        uint16_t* srcRow = buffer + (srcY + row) * fbWidth + srcX;
+        uint16_t* dstRow = fb + (destY + row) * fbWidth + destX;
+        memcpy(dstRow, srcRow, srcW * sizeof(uint16_t));
+    }
+}
+
 void TRGBDisplay::drawSubRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h,
                                     int16_t srcX, int16_t srcY, int16_t srcW, int16_t srcH) {
     // RGB panel doesn't support partial updates efficiently

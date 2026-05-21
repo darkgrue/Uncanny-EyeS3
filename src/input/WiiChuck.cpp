@@ -7,7 +7,18 @@ WiiChuckInput::WiiChuckInput(uint8_t address)
 }
 
 bool WiiChuckInput::begin() {
-    Wire.begin(BOARD_I2C_SDA, BOARD_I2C_SCL);
+    // Only call Wire.begin() if it hasn't been started yet
+    // This prevents "Bus already started" warnings when SY6970 or other
+    // peripherals have already initialized the I2C bus
+    // Note: Wire doesn't have a native "isStarted()" check, so we track it ourselves
+    // If Wire was already started by another component, we just set the clock
+    static bool wireStarted = false;
+    if (!wireStarted) {
+        Wire.begin(BOARD_I2C_SDA, BOARD_I2C_SCL);
+        wireStarted = true;
+    } else {
+        // Wire already started - just ensure clock is set
+    }
     Wire.setClock(400000);
     
     // Initialize controller

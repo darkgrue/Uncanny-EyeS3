@@ -5,7 +5,7 @@
 #if defined(ESP32)
 #include <driver/spi_master.h>
 
-#define SPI_MAX_PIXELS_AT_ONCE 4096//1024
+#define SPI_MAX_PIXELS_AT_ONCE 16384
 #define QSPI_FREQUENCY 8000000
 // #define QSPI_FREQUENCY 80000000
 #define QSPI_SPI_MODE SPI_MODE0
@@ -38,7 +38,7 @@ public:
   void writeIndexedPixels(uint8_t *data, uint16_t *idx, uint32_t len) override;
 void writeIndexedPixelsDouble(uint8_t *data, uint16_t *idx, uint32_t len) override;
 
-  // Async DMA support
+// Async DMA support
   bool queueTrans(uint32_t len);
   bool waitTransComplete(uint32_t timeout_ms = 100);
   bool isTransComplete();
@@ -52,6 +52,13 @@ void writeIndexedPixelsDouble(uint8_t *data, uint16_t *idx, uint32_t len) overri
   bool queueSingleTrans(uint16_t *data, uint32_t len);
   bool waitSingleTrans(uint32_t timeout_ms = 1000);
   bool isSingleTransComplete();
+
+  // Chunked async transfer - for streaming large buffers
+  // Returns true if chunk was queued, false if queue full
+  bool queueChunk(uint8_t *data, uint32_t len, bool isFirst, bool isLast);
+
+  // Wait for all queued chunks to complete
+  bool waitAllChunks(uint32_t timeout_ms = 10000);
 
 private:
   INLINE void CS_HIGH(void);
@@ -79,6 +86,13 @@ private:
   // Async transaction tracking
   bool _transPending = false;
   uint32_t _lastTransLen = 0;
+
+  // Queue size for async transfers
+  static constexpr uint8_t ASYNC_QUEUE_SIZE = 4;
+  uint8_t _activeTransCount = 0;
+  uint8_t _currentTransIndex = 0;
+  spi_transaction_ext_t _asyncTrans[ASYNC_QUEUE_SIZE];
+  uint8_t _asyncTransUsed[ASYNC_QUEUE_SIZE] = {0};
 };
 
 #endif // #if defined(ESP32)

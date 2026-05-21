@@ -267,13 +267,17 @@ void renderLoopTask(void *param)
       s_animator->update(millis());
       s_animator->broadcastState();
 
+      // Check if we can render (previous transfer complete)
+      EyeRenderer* renderer = s_animator->getRenderer();
+
       if (s_animator->needsRender())
       {
         float eyeX = s_animator->getEyeX();
         float eyeY = s_animator->getEyeY();
         float pupilFactor = s_animator->getPupilFactor();
 
-        s_animator->getRenderer()->renderFrame(
+        // Render frame
+        renderer->renderFrame(
             eyeX, eyeY,
             pupilFactor,
             1.0f, 1.0f,

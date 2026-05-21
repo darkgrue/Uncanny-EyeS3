@@ -67,7 +67,7 @@ bool Arduino_ESP32QSPI::begin(int32_t speed, int8_t dataMode)
       .clock_speed_hz = _speed,
       .spics_io_num = -1, // avoid use system CS control
       .flags = SPI_DEVICE_HALFDUPLEX,
-      .queue_size = 1,
+      .queue_size = 4,  // 4 transfer slots for efficient QSPI operation
   };
   ret = spi_bus_add_device(QSPI_SPI_HOST, &devcfg, &_handle);
   if (ret != ESP_OK)
@@ -747,6 +747,83 @@ bool Arduino_ESP32QSPI::waitSingleTrans(uint32_t timeout_ms)
     return true;
   }
   return false;
+}
+
+/**
+ * @brief Queue a chunk of pixel data asynchronously
+ * @param data Pixel data buffer
+ * @param len Number of bytes to transfer
+ * @param isFirst True if this is the first chunk (sets up address window)
+ * @param isLast True if this is the last chunk (ends the transfer)
+ * @return true if queued successfully, false if queue is full
+ */
+bool Arduino_ESP32QSPI::queueChunk(uint8_t *data, uint32_t len, bool isFirst, bool isLast)
+{
+  // Find a free transaction slot
+  uint8_t slot = 0;
+  for (uint8_t i = 0; i < ASYNC_QUEUE_SIZE; i++) {
+    if (!_asyncTransUsed[i]) {
+      slot = i;
+      break;
+    }
+  }
+  if (_asyncTransUsed[slot]) {
+    return false;  // No free slots
+  }
+
+  // Configure transaction flags
+  uint32_t flags = SPI_TRANS_MODE_QIO;
+  if (!isFirst) {
+    flags |= SPI_TRANS_VARIABLE_CMD | SPI_TRANS_VARIABLE_ADDR | SPI_TRANS_VARIABLE_DUMMY;
+  }
+
+  _asyncTrans[slot].base.flags = flags;
+  _asyncTrans[slot].base.cmd = 0x32;
+  _asyncTrans[slot].base.addr = 0x003C00;
+  _asyncTrans[slot].base.tx_buffer = data;
+  _asyncTrans[slot].base.length = len << 3;  // bytes to bits
+
+  // Queue the transaction
+  esp_err_t ret = spi_device_queue_trans(_handle, &_asyncTrans[slot].base, 0);  // non-blocking
+  if (ret == ESP_OK) {
+    _asyncTransUsed[slot] = 1;
+    _activeTransCount++;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @brief Wait for all queued chunks to complete
+ */
+bool Arduino_ESP32QSPI::waitAllChunks(uint32_t timeout_ms)
+{
+  uint32_t startMs = millis();
+  uint32_t remaining = timeout_ms;
+
+  while (_activeTransCount > 0) {
+    if (millis() - startMs >= timeout_ms) {
+      return false;  // Timeout
+    }
+
+    // Check each slot
+    for (uint8_t i = 0; i < ASYNC_QUEUE_SIZE; i++) {
+      if (_asyncTransUsed[i]) {
+        spi_transaction_t *rtrans = nullptr;
+        esp_err_t ret = spi_device_get_trans_result(_handle, &rtrans, pdMS_TO_TICKS(remaining));
+        if (ret == ESP_OK) {
+          _asyncTransUsed[i] = 0;
+          _activeTransCount--;
+        }
+      }
+    }
+
+    if (_activeTransCount > 0) {
+      vTaskDelay(1);
+    }
+  }
+
+  return true;
 }
 
 #endif // #if defined(ESP32)

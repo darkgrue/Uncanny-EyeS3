@@ -2,8 +2,11 @@
 #include "pin_config.h"
 #include "Arduino_TFT.h"  // For getDataBus()
 
+#include "../lib/Arduino_GFX-1.3.7/src/databus/Arduino_ESP32QSPI.h"
+
 AMOLEDDisplay::AMOLEDDisplay()
     : m_gfx(nullptr), m_qspiBus(nullptr), m_initialized(false)
+    , m_transferPending(false)
 {
 }
 
@@ -41,17 +44,6 @@ bool AMOLEDDisplay::begin()
     m_gfx->Display_Brightness(i);
     delay(3);
   }
-
-  // Diagnostic: Draw horizontal color bars to verify data reaches display
-  Serial.println("Drawing diagnostic bars...");
-  m_gfx->fillRect(0, 0, 466, 116, 0xF800); // Red top quarter
-  delay(100);
-  m_gfx->fillRect(0, 116, 466, 116, 0x07E0); // Green
-  delay(100);
-  m_gfx->fillRect(0, 232, 466, 117, 0x001F); // Blue
-  delay(100);
-  m_gfx->fillRect(0, 349, 466, 117, 0xFFFF); // White bottom
-  delay(500);
 
   // Clear to black for app use
   m_gfx->fillScreen(0x0000);
@@ -96,20 +88,39 @@ void AMOLEDDisplay::drawSubRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int
 {
   if (!m_gfx || !bitmap) return;
 
-  // Set address window to target region
-  m_gfx->startWrite();
-  m_gfx->writeAddrWindow(x, y, w, h);
+  // CO5300 requires even dimensions - enforce
+  int16_t dstW = srcW;
+  int16_t dstH = srcH;
+  if (dstW % 2 != 0) dstW++;
+  if (dstH % 2 != 0) dstH++;
 
-  // Extract sub-region and write in chunks
-  // bitmap is the full buffer, srcX/srcY is offset into it, srcW/srcH is size to copy
-  uint16_t *rowPtr = bitmap + srcY * w + srcX;
+  // Use draw16bitBeRGBBitmap for the sub-region
+  // This is the same as the working full-frame path which uses writeBytes internally
+  // Create a temporary buffer for the sub-region
+  static uint16_t* subBuf = nullptr;
+  static int subBufSize = 0;
 
-  for (int16_t row = 0; row < srcH; row++) {
-    m_gfx->writePixels(rowPtr, srcW);
-    rowPtr += w;  // Advance to next row in full buffer
+  int neededSize = dstW * dstH;
+  if (neededSize > subBufSize) {
+    if (subBuf) {
+      heap_caps_free(subBuf);
+    }
+    subBuf = (uint16_t*)heap_caps_malloc(neededSize * sizeof(uint16_t), MALLOC_CAP_8BIT | MALLOC_CAP_32BIT);
+    subBufSize = neededSize;
   }
 
-  m_gfx->endWrite();
+  if (!subBuf) return;
+
+  // Copy sub-region to contiguous buffer (no pixel reordering, justmemcpy)
+  uint16_t* dst = subBuf;
+  for (int16_t row = 0; row < srcH; row++) {
+    uint16_t* srcRow = bitmap + (srcY + row) * w + srcX;
+    memcpy(dst, srcRow, srcW * sizeof(uint16_t));
+    dst += dstW;
+  }
+
+  // Use the same draw path as full-frame (which works correctly)
+  m_gfx->draw16bitBeRGBBitmap(x, y, subBuf, dstW, dstH);
 }
 
 bool AMOLEDDisplay::drawRGBBitmapAsync(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h)
@@ -132,6 +143,28 @@ bool AMOLEDDisplay::beginDisplayTransfer()
   return true;
 }
 
+bool AMOLEDDisplay::waitForTransferComplete(uint32_t timeoutMs)
+{
+  if (!m_transferPending) return true;
+
+  Arduino_DataBus* bus = m_gfx->getDataBus();
+  if (!bus) return false;
+
+  Arduino_ESP32QSPI* qspi = (Arduino_ESP32QSPI*)bus;
+
+  if (qspi->waitAllChunks(timeoutMs)) {
+    m_transferPending = false;
+    m_gfx->endWrite();
+    return true;
+  }
+  return false;
+}
+
+bool AMOLEDDisplay::waitForAsyncTransfer(uint32_t timeoutMs)
+{
+  return waitForTransferComplete(timeoutMs);
+}
+
 void AMOLEDDisplay::endDisplayTransfer()
 {
   if (!m_gfx) return;
@@ -152,41 +185,6 @@ bool AMOLEDDisplay::isTransferComplete()
 bool AMOLEDDisplay::isDMATransferBusy()
 {
   return m_transferPending;
-}
-
-void AMOLEDDisplay::drawTestPattern()
-{
-  if (!m_gfx)
-    return;
-
-  // Test pattern dimensions
-  constexpr int TEST_W = 100;
-  constexpr int TEST_H = 100;
-
-  // Create checkerboard pattern in static buffer to avoid stack overflow
-  static uint16_t testBmp[TEST_W * TEST_H];
-
-  // Fill with red/white checkerboard pattern
-  for (int y = 0; y < TEST_H; y++)
-  {
-    for (int x = 0; x < TEST_W; x++)
-    {
-      bool isRed = ((x / 10) + (y / 10)) % 2 == 0;
-      testBmp[y * TEST_W + x] = isRed ? 0xF800 : 0xFFFF; // Red or White
-    }
-  }
-
-  // Draw test pattern in center of screen
-  int16_t startX = (466 - TEST_W) / 2;
-  int16_t startY = (466 - TEST_H) / 2;
-
-  Serial.printf("[AMOLEDDisplay] Drawing %dx%d test pattern at (%d,%d)\n",
-                TEST_W, TEST_H, startX, startY);
-
-  // Like LVGL example: call draw16bitBeRGBBitmap directly without startWrite/endWrite
-  m_gfx->draw16bitBeRGBBitmap(startX, startY, testBmp, TEST_W, TEST_H);
-
-  Serial.println("[AMOLEDDisplay] Test pattern drawn.");
 }
 
 void AMOLEDDisplay::pushPixels(uint16_t color, size_t count)
@@ -266,3 +264,78 @@ void AMOLEDDisplay::drawString(int16_t x, int16_t y, const char *str, uint16_t c
     m_gfx->print(str);
   }
 }
+
+// Direct bulk transfer - bypasses GFX library for maximum throughput
+// Uses QSPI directly to push pixel data to CO5300 display
+void AMOLEDDisplay::directTransfer(uint16_t* buffer, int destX, int destY,
+                                     int srcX, int srcY, int srcW, int srcH)
+{
+  if (!m_gfx || !buffer) return;
+
+  // CO5300 requires even coordinates
+  if (destX % 2 != 0) destX--;
+  if (destY % 2 != 0) destY--;
+  if (srcW % 2 != 0) srcW++;
+  if (srcH % 2 != 0) srcH++;
+
+  // Get QSPI bus for direct access
+  Arduino_DataBus* bus = m_gfx->getDataBus();
+  if (!bus) return;
+
+  Arduino_ESP32QSPI* qspi = (Arduino_ESP32QSPI*)bus;
+
+  // Set up address window for the destination region
+  m_gfx->startWrite();
+  m_gfx->writeAddrWindow(destX, destY, srcW, srcH);
+
+  int totalPixels = srcW * srcH;
+  uint32_t totalBytes = totalPixels * 2;
+
+  // Check if source region is already contiguous (no copy needed)
+  // Contiguous when: srcX == 0 AND srcW == m_width (full row segments)
+  bool isContiguous = (srcX == 0) && (srcW == m_width);
+
+  if (isContiguous) {
+      // Source is contiguous - pass directly to QSPI
+      uint16_t* srcPtr = buffer + srcY * m_width;
+      qspi->writeBytes((uint8_t*)srcPtr, totalBytes);
+  } else {
+      // Non-contiguous source - need to copy row-by-row to temp buffer
+      constexpr int STACK_BUF_PIXELS = 8192;
+      static uint16_t* s_copyBuf = nullptr;
+      static size_t s_copyBufSize = 0;
+
+      uint16_t* copyBuf = nullptr;
+
+      if (totalPixels <= STACK_BUF_PIXELS) {
+          static uint16_t stackBuf[STACK_BUF_PIXELS];
+          copyBuf = stackBuf;
+      } else {
+          if (totalPixels > (int)s_copyBufSize) {
+              if (s_copyBuf) heap_caps_free(s_copyBuf);
+              s_copyBuf = (uint16_t*)heap_caps_malloc(totalPixels * sizeof(uint16_t),
+                                                      MALLOC_CAP_8BIT | MALLOC_CAP_32BIT);
+              s_copyBufSize = totalPixels;
+          }
+          copyBuf = s_copyBuf;
+      }
+
+      if (!copyBuf) {
+          m_gfx->endWrite();
+          return;
+      }
+
+      // Copy row-by-row
+      for (int row = 0; row < srcH; row++) {
+          uint16_t* srcRow = buffer + (srcY + row) * m_width + srcX;
+          memcpy(copyBuf + row * srcW, srcRow, srcW * sizeof(uint16_t));
+      }
+
+      qspi->writeBytes((uint8_t*)copyBuf, totalBytes);
+  }
+
+  m_gfx->endWrite();
+}
+
+
+

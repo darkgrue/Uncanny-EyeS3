@@ -32,30 +32,31 @@ public:
     void drawRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h) override;
     void drawSubRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h,
                           int16_t srcX, int16_t srcY, int16_t srcW, int16_t srcH) override;
-    bool drawRGBBitmapAsync(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h) override;
+bool drawRGBBitmapAsync(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h) override;
     bool isDMATransferBusy() override;
 
-    // Async transfer support (stubbed for now)
-    bool beginAsyncTransfer() override { return false; }
-    bool writePixelsAsync(uint16_t *pixels, size_t count) override { return false; }
-    bool endAsyncTransfer() override { return false; }
-    bool isAsyncTransferComplete() override { return true; }
+    // Poll-based wait for transfer completion (non-blocking check)
+    bool waitForTransferComplete(uint32_t timeoutMs);
+
+    // Wait for async transfer to complete
+    bool waitForAsyncTransfer(uint32_t timeoutMs) override;
 
     // Software sync for render/display overlap
     bool beginDisplayTransfer() override;
     void endDisplayTransfer() override;
     bool isTransferComplete() override;
 
-    // Test pattern for draw16bitBeRGBBitmap verification
-    void drawTestPattern();
+    // Direct bulk transfer - bypasses GFX library for maximum throughput
+    // Transfers pixels directly from buffer to display using QSPI
+    void directTransfer(uint16_t* buffer, int destX, int destY,
+                        int srcX, int srcY, int srcW, int srcH);
 
 private:
     Arduino_CO5300* m_gfx = nullptr;
-    Arduino_ESP32QSPI* m_qspiBus = nullptr;  // Direct QSPI access for async DMA
+    Arduino_DataBus* m_qspiBus = nullptr;  // Direct QSPI access for async DMA
     int m_width = 466;
     int m_height = 466;
     bool m_initialized = false;
-    bool m_asyncPending = false;
     bool m_transferPending = false;
 };
 
