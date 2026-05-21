@@ -816,7 +816,6 @@ void Arduino_ESP32SPI::writeIndexedPixels(uint8_t *data, uint16_t *idx, uint32_t
  */
 void Arduino_ESP32SPI::writeIndexedPixelsDouble(uint8_t *data, uint16_t *idx, uint32_t len)
 {
-  uint16_t p;
   if (_dc == GFX_NOT_DEFINED) // 9-bit SPI
   {
     uint16_t hi, lo;
@@ -970,18 +969,18 @@ INLINE void Arduino_ESP32SPI::CS_LOW(void)
  */
 INLINE void Arduino_ESP32SPI::POLL(uint32_t len)
 {
-  #if (CONFIG_IDF_TARGET_ESP32)
-_spi->dev->mosi_dlen.usr_mosi_dbitlen = len;
+#if (CONFIG_IDF_TARGET_ESP32)
+  _spi->dev->mosi_dlen.usr_mosi_dbitlen = len;
 #elif (CONFIG_IDF_TARGET_ESP32S2)
-_spi->dev->mosi_dlen.usr_mosi_bit_len = len;
+  _spi->dev->mosi_dlen.usr_mosi_bit_len = len;
 #elif (CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32C3)
-_spi->dev->ms_dlen.ms_data_bitlen = len;
+  _spi->dev->ms_dlen.ms_data_bitlen = len;
 #endif
 
 #if (CONFIG_IDF_TARGET_ESP32)
-_spi->dev->miso_dlen.usr_miso_dbitlen = 0;
+  _spi->dev->miso_dlen.usr_miso_dbitlen = 0;
 #elif (CONFIG_IDF_TARGET_ESP32S2)
-_spi->dev->miso_dlen.usr_miso_bit_len = 0;
+  _spi->dev->miso_dlen.usr_miso_bit_len = 0;
 #endif
 
 #if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3

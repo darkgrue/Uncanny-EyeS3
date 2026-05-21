@@ -36,9 +36,23 @@ public:
   void writeBytes(uint8_t *data, uint32_t len) override;
 
   void writeIndexedPixels(uint8_t *data, uint16_t *idx, uint32_t len) override;
-  void writeIndexedPixelsDouble(uint8_t *data, uint16_t *idx, uint32_t len) override;
+void writeIndexedPixelsDouble(uint8_t *data, uint16_t *idx, uint32_t len) override;
 
-protected:
+  // Async DMA support
+  bool queueTrans(uint32_t len);
+  bool waitTransComplete(uint32_t timeout_ms = 100);
+  bool isTransComplete();
+
+  // Low-level async pixel transfer
+  void beginAsyncWrite();
+  void asyncWriteAllPixels(uint16_t *data, uint32_t totalLen);
+  void endAsyncWrite();
+
+  // Single transaction async
+  bool queueSingleTrans(uint16_t *data, uint32_t len);
+  bool waitSingleTrans(uint32_t timeout_ms = 1000);
+  bool isSingleTransComplete();
+
 private:
   INLINE void CS_HIGH(void);
   INLINE void CS_LOW(void);
@@ -61,6 +75,10 @@ private:
     uint16_t _buffer16[SPI_MAX_PIXELS_AT_ONCE];
     uint32_t _buffer32[SPI_MAX_PIXELS_AT_ONCE / 2];
   };
+
+  // Async transaction tracking
+  bool _transPending = false;
+  uint32_t _lastTransLen = 0;
 };
 
 #endif // #if defined(ESP32)

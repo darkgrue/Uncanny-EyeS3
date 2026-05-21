@@ -122,12 +122,12 @@ void EyeAnimator::update(uint32_t now) {
     m_blink.update(micros());
     
     // Update light sensor / autonomous iris
-    if (m_lightSensorPin >= 0) {
+if (m_lightSensorPin >= 0) {
         updateLightSensor(now);
     } else {
         updateIrisAutonomous(now);
     }
-    
+
     // Mark for rendering
     m_needsRender = true;
 }

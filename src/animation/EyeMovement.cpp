@@ -51,18 +51,19 @@ void EyeMovement::setRandomMode(bool enabled) {
 }
 
 void EyeMovement::startRandomMove() {
-    float r = m_boundsRadius;
-    
+    float r = m_boundsRadius * 0.5f;  // Reduced radius - smaller movements
+
     // Random position within circle
     float angle = random(0, 6283) / 1000.0f;  // 0 to 2*PI
     float radius = sqrt((float)random(0, 1000) / 1000.0f) * r;
-    
+
     m_targetX = cos(angle) * radius;
     m_targetY = sin(angle) * radius;
-    
+
     m_moveDuration = random(m_minDuration, m_maxDuration);
     m_moveStartTime = millis();
     m_moving = true;
+    m_idle = false;  // No longer idle - actively moving
 }
 
 void EyeMovement::moveTo(float x, float y, uint32_t durationMs) {
@@ -100,8 +101,8 @@ bool EyeMovement::update(uint32_t dt) {
         m_moving = false;
         
         if (m_randomMode) {
-            // Set up next pause before random movement
-            m_moveDuration = random(10, 3000);  // 10ms to 3s pause
+// Set up next pause before random movement
+            m_moveDuration = random(500, 2000);  // 500ms to 2s pause between movements
             m_moveStartTime = now;
         }
         return true;

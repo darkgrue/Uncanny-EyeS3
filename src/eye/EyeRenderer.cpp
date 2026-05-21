@@ -1,19 +1,33 @@
 #include "EyeRenderer.h"
 #include <Arduino.h>
+#include <esp_heap_caps.h>
+#include <esp_timer.h>
 
-EyeRenderer::EyeRenderer() 
+EyeRenderer::EyeRenderer()
     : m_display(nullptr)
     , m_displaySize(0)
     , m_mapRadius(0)
     , m_mapDiameter(0)
     , m_eyeDef(nullptr)
-    , m_columnBuf(nullptr) {
+    , m_frameBuf1(nullptr)
+    , m_frameBuf2(nullptr)
+    , m_renderBuf(nullptr)
+    , m_displayBuf(nullptr)
+    , m_dirtyMinX(0), m_dirtyMinY(0), m_dirtyMaxX(0), m_dirtyMaxY(0)
+    , m_prevDirtyMinX(0), m_prevDirtyMinY(0), m_prevDirtyMaxX(0), m_prevDirtyMaxY(0)
+    , m_transferInProgress(false)
+    , m_lastTransferTime(0)
+{
 }
 
 EyeRenderer::~EyeRenderer() {
-    if (m_columnBuf) {
-        delete[] m_columnBuf;
-        m_columnBuf = nullptr;
+    if (m_frameBuf1) {
+        heap_caps_free(m_frameBuf1);
+        m_frameBuf1 = nullptr;
+    }
+    if (m_frameBuf2) {
+        heap_caps_free(m_frameBuf2);
+        m_frameBuf2 = nullptr;
     }
 }
 
@@ -27,173 +41,158 @@ bool EyeRenderer::begin(DisplayHAL* display, const EyeDefinition& eyeDef) {
     m_mapRadius = eyeDef.polarMap.radius;
     m_mapDiameter = m_mapRadius * 2;
 
-    // Allocate column buffer
-    if (m_columnBuf) delete[] m_columnBuf;
-    m_columnBuf = new uint16_t[m_displaySize];
+    // Allocate double buffers in PSRAM with 4-byte alignment (addr_align requirement)
+    size_t bufSize = m_displaySize * m_displaySize * sizeof(uint16_t);
+    // Use MALLOC_CAP_32BIT for proper alignment (addr_align=4 for CO5300)
+    m_frameBuf1 = (uint16_t*)heap_caps_malloc(bufSize, MALLOC_CAP_8BIT | MALLOC_CAP_32BIT);
+    m_frameBuf2 = (uint16_t*)heap_caps_malloc(bufSize, MALLOC_CAP_8BIT | MALLOC_CAP_32BIT);
 
-    // Precompute circular clip bounds for the eye
-    uint16_t eyeRadius = eyeRadiusPixels(eyeDef);
-    int centerX = m_displaySize / 2;
-    int centerY = m_displaySize / 2;
-    m_clip.compute(centerX, centerY, eyeRadius, m_displaySize, m_displaySize);
+    if (!m_frameBuf1 || !m_frameBuf2) {
+        Serial.println("[EyeRenderer] Failed to allocate double buffers!");
+        if (m_frameBuf1) heap_caps_free(m_frameBuf1);
+        if (m_frameBuf2) heap_caps_free(m_frameBuf2);
+        m_frameBuf1 = m_frameBuf2 = nullptr;
+        return false;
+    }
+
+    // Start with buf1 as render target, buf2 as display target
+    m_renderBuf = m_frameBuf1;
+    m_displayBuf = m_frameBuf2;
+
+    // Initialize dirty region to full screen
+    m_dirtyMinX = 0;
+    m_dirtyMinY = 0;
+    m_dirtyMaxX = m_displaySize;
+    m_dirtyMaxY = m_displaySize;
+    m_prevDirtyMinX = 0;
+    m_prevDirtyMinY = 0;
+    m_prevDirtyMaxX = m_displaySize;
+    m_prevDirtyMaxY = m_displaySize;
+    m_transferInProgress = false;
+    m_lastTransferTime = 0;
+
+    Serial.printf("[EyeRenderer] Double buffer allocated: %d bytes each\n", bufSize);
 
     return true;
-}
-
-// Helper function to get texture color with coordinate wrapping
-static inline uint16_t getTextureColor(const uint16_t* data, uint16_t w, uint16_t h,
-                                        int32_t x, int32_t y) {
-    if (x < 0) x += w * (-(x / w) + 1);
-    if (y < 0) y += h * (-(y / h) + 1);
-    x %= w;
-    y %= h;
-    return data[y * w + x];
-}
-
-// Fixed-point texture coordinate calculation helper
-// Uses 16-bit fractional part (fixed-point Q16)
-static inline int32_t fixedMul(int32_t a, int32_t b) {
-    return (a * b) >> 16;
-}
-
-void EyeRenderer::renderColumn(int x, float eyeX, float eyeY, float pupilFactor,
-                               float upperLidFactor, float lowerLidFactor, float blinkFactor,
-                               uint16_t irisAngle, uint16_t scleraAngle) {
-    if (!m_eyeDef || !m_display) return;
-    
-    const uint16_t DISPLAY_W = m_displaySize;
-    const uint16_t DISPLAY_H = m_displaySize;
-    const int16_t MAP_RADIUS = m_mapRadius;
-    const int16_t MAP_DIAMETER = m_mapDiameter;
-    
-    const EyeDefinition& eye = *m_eyeDef;
-    
-    // Calculate eye radius and iris radius from fraction
-    uint16_t eyeRadius = eyeRadiusPixels(eye);
-    uint16_t irisRadius = irisRadiusPixels(eye);
-    
-    // Calculate eye position in pixels (from normalized -1.0 to +1.0)
-    int16_t eyePixelX = (int16_t)(eyeX * (float)(DISPLAY_W / 2));
-    int16_t eyePixelY = (int16_t)(eyeY * (float)(DISPLAY_H / 2));
-    
-    // Position offset relative to display center
-    int16_t xOffset = x - (DISPLAY_W / 2);
-    
-    // Calculate eyelid boundaries from lookup tables
-    uint16_t lidIdx = x * 2;
-    uint8_t upperStart = eye.eyelid.upper[lidIdx];
-    uint8_t upperEnd = eye.eyelid.upper[lidIdx + 1];
-    uint8_t lowerStart = eye.eyelid.lower[lidIdx];
-    uint8_t lowerEnd = eye.eyelid.lower[lidIdx + 1];
-    
-    // If 255, no eyelid defined for this column
-    if (upperStart == 255) upperStart = 0;
-    if (upperEnd == 255) upperEnd = 255;
-    if (lowerStart == 255) lowerStart = 0;
-    if (lowerEnd == 255) lowerEnd = 255;
-    
-    // Apply lid factors and blink
-    float upperPos = upperStart + upperLidFactor * (upperEnd - upperStart);
-    float lowerPos = lowerStart + lowerLidFactor * (lowerEnd - lowerStart);
-    upperPos = upperPos * (1.0f - blinkFactor);
-    lowerPos = lowerPos * (1.0f - blinkFactor);
-    
-    int16_t y1 = (int16_t)lowerPos;  // Bottom of visible eye
-    int16_t y2 = (int16_t)upperPos;  // Top of visible eye
-    y1 = constrain(y1, 0, DISPLAY_H - 1);
-    y2 = constrain(y2, 0, DISPLAY_H - 1);
-    
-    // Calculate scaling factors from actual iris radius
-    int16_t irisRadiusMap = (MAP_RADIUS * irisRadius) / eyeRadius;
-    int16_t pupilRadiusMap = (int16_t)((float)irisRadiusMap * pupilFactor);
-    
-    // Get displacement map for spherical correction
-    int16_t dispX;
-    int16_t dispIdx;
-    int16_t halfW = DISPLAY_W / 2;
-    int16_t halfH = DISPLAY_H / 2;
-    
-    if (x < halfW) {
-        dispIdx = ((halfW - 1) - x) * halfH;
-        dispX = -eye.dispMap[dispIdx];
-    } else {
-        dispIdx = (x - halfW) * halfH;
-        dispX = eye.dispMap[dispIdx];
-    }
-    
-uint16_t* colBuf = m_columnBuf;
-
-    for (int16_t y = 0; y < DISPLAY_H; y++) {
-        if (y < y1 || y > y2) {
-            // Outside eye area - eyelid color
-            *colBuf++ = eye.eyelid.color;
-        } else {
-            // Inside eye area - lookup polar coordinates
-            int16_t mapX = xOffset + dispX + eyePixelX + MAP_RADIUS;
-            int16_t mapY = y - (DISPLAY_H / 2) + dispX + eyePixelY + MAP_RADIUS;
-
-            // Clamp to map bounds
-            mapX = constrain(mapX, 0, MAP_DIAMETER - 1);
-            mapY = constrain(mapY, 0, MAP_DIAMETER - 1);
-
-            int mapIdx = mapY * MAP_DIAMETER + mapX;
-
-            uint8_t angle = eye.polarMap.angleMap[mapIdx];
-            uint8_t dist = eye.polarMap.distMap[mapIdx];
-
-            if (dist < 128) {
-                // Sclera (0-127 in polar dist = outer to iris boundary)
-                if (eye.sclera.texture.data) {
-                    uint16_t texAngle = (angle + scleraAngle) & 0xFF;
-                    int16_t texX = (texAngle * eye.sclera.texture.width) >> 8;
-                    int16_t texY = (dist * eye.sclera.texture.height) >> 7;
-                    *colBuf++ = getTextureColor(eye.sclera.texture.data,
-                                                  eye.sclera.texture.width,
-                                                  eye.sclera.texture.height,
-                                                  texX, texY);
-                } else {
-                    *colBuf++ = eye.sclera.color;
-                }
-            } else if (dist < 255) {
-                // Iris/pupil (128-254 = iris/pupil region, 255 = off map)
-                int8_t irisDist = dist - 128;  // 0-126
-                int16_t texY = (irisDist * eye.iris.texture.height) / pupilRadiusMap;
-                texY = constrain(texY, 0, eye.iris.texture.height - 1);
-
-                if (irisDist > pupilRadiusMap) {
-                    // Iris (outside pupil)
-                    if (eye.iris.texture.data) {
-                        uint16_t texAngle = (angle + irisAngle) & 0xFF;
-                        int16_t texX = (texAngle * eye.iris.texture.width) >> 8;
-                        *colBuf++ = getTextureColor(eye.iris.texture.data,
-                                                      eye.iris.texture.width,
-                                                      eye.iris.texture.height,
-                                                      texX, texY);
-                    } else {
-                        *colBuf++ = eye.iris.color;
-                    }
-                } else {
-                    // Pupil
-                    *colBuf++ = eye.pupil.color;
-                }
-            } else {
-                // Behind sphere or off map
-                *colBuf++ = eye.backColor;
-            }
-        }
-    }
 }
 
 void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
                               float upperLidFactor, float lowerLidFactor, float blinkFactor,
                               uint16_t irisAngle, uint16_t scleraAngle) {
-    if (!m_display) return;
+    if (!m_display || !m_eyeDef || !m_renderBuf) {
+        Serial.println("[EyeRenderer] ERROR: null pointer!");
+        return;
+    }
 
-    for (int x = 0; x < m_displaySize; x++) {
-        renderColumn(x, eyeX, eyeY, pupilFactor, upperLidFactor, lowerLidFactor,
-                     blinkFactor, irisAngle, scleraAngle);
+    const EyeDefinition& eye = *m_eyeDef;
 
-        m_display->setAddrWindow(x, 0, 1, m_displaySize);
-        m_display->pushPixels(m_columnBuf, m_displaySize);
+    // Calculate radii from eye definition
+    uint16_t eyeRadius = eyeRadiusPixels(eye);
+    uint16_t irisRadius = irisRadiusPixels(eye);
+    uint16_t pupilRadius = (uint16_t)(irisRadius * eye.pupil.minFraction);
+
+    int centerX = m_displaySize / 2;
+    int centerY = m_displaySize / 2;
+
+    // Apply eye position offset (eyeX, eyeY are normalized -1 to +1)
+    int offsetX = (int)(eyeX * (m_displaySize / 4));
+    int offsetY = (int)(eyeY * (m_displaySize / 4));
+
+    // Compute bounding box to skip unnecessary pixels
+    int minX = centerX + offsetX - eyeRadius;
+    int maxX = centerX + offsetX + eyeRadius;
+    int minY = centerY + offsetY - eyeRadius;
+    int maxY = centerY + offsetY + eyeRadius;
+
+    // Clamp to display bounds
+    minX = (minX < 0) ? 0 : minX;
+    maxX = (maxX > m_displaySize) ? m_displaySize : maxX;
+    minY = (minY < 0) ? 0 : minY;
+    maxY = (maxY > m_displaySize) ? m_displaySize : maxY;
+
+    // CO5300 requires EVEN coordinates and dimensions
+    // Round down odd start positions, round up odd sizes
+    if (minX % 2 != 0) minX--;
+    if (minY % 2 != 0) minY--;
+    if (maxX % 2 != 0) maxX++;
+    if (maxY % 2 != 0) maxY++;
+
+    // Clamp again after even adjustment
+    minX = (minX < 0) ? 0 : minX;
+    maxX = (maxX > m_displaySize) ? m_displaySize : maxX;
+    minY = (minY < 0) ? 0 : minY;
+    maxY = (maxY > m_displaySize) ? m_displaySize : maxY;
+
+    // Precompute squared radii
+    int eyeRadiusSq = (int)eyeRadius * (int)eyeRadius;
+    int irisRadiusSq = (int)irisRadius * (int)irisRadius;
+    int pupilRadiusSq = (int)pupilRadius * (int)pupilRadius;
+
+    // First fill entire buffer with background color (fast memset)
+    uint16_t bgColor = eye.backColor;
+    m_backgroundColor = bgColor;
+    int totalPixels = m_displaySize * m_displaySize;
+    memset(m_renderBuf, bgColor, totalPixels * sizeof(uint16_t));
+
+    // Only render pixels within bounding box
+    for (int y = minY; y < maxY; y++) {
+        for (int x = minX; x < maxX; x++) {
+            int dx = x - centerX - offsetX;
+            int dy = y - centerY - offsetY;
+            int distSq = dx * dx + dy * dy;
+
+            uint16_t color;
+            if (distSq <= eyeRadiusSq) {
+                if (distSq <= irisRadiusSq) {
+                    if (distSq <= pupilRadiusSq) {
+                        color = eye.pupil.color;
+                    } else {
+                        color = eye.iris.color;
+                    }
+                } else {
+                    color = eye.sclera.color;
+                }
+                m_renderBuf[y * m_displaySize + x] = color;
+            }
+        }
+    }
+
+    // Software sync using time-based tracking
+    if (m_transferInProgress) {
+        int64_t elapsed = esp_timer_get_time() - m_lastTransferTime;
+        if (elapsed < 43000) {  // 43ms transfer time at 80MHz
+            vTaskDelay(1);
+        }
+        m_transferInProgress = false;
+    }
+
+    // Swap buffers
+    uint16_t* temp = m_renderBuf;
+    m_renderBuf = m_displayBuf;
+    m_displayBuf = temp;
+
+    // Synchronous transfer - blocks for ~20ms
+    int64_t transferStart = esp_timer_get_time();
+    m_display->beginDisplayTransfer();
+    m_display->drawRGBBitmap(0, 0, m_displayBuf, m_displaySize, m_displaySize);
+    m_display->endDisplayTransfer();
+    int64_t transferEnd = esp_timer_get_time();
+
+    m_transferInProgress = true;
+    m_lastTransferTime = esp_timer_get_time();
+
+    // Timing stats every 60 frames
+    static int64_t minXfer = INT64_MAX;
+    static int64_t maxXfer = 0;
+    static uint32_t samples = 0;
+
+    int64_t xferTime = transferEnd - transferStart;
+    if (xferTime < minXfer) minXfer = xferTime;
+    if (xferTime > maxXfer) maxXfer = xferTime;
+    samples++;
+
+    if (samples % 60 == 0) {
+        Serial.printf("[XFER] %lld us (%lld-%lld) FPS=%.1f\n",
+            xferTime, minXfer, maxXfer, 1000000.0 / xferTime);
     }
 }

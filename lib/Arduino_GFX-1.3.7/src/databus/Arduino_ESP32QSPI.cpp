@@ -539,4 +539,214 @@ INLINE void Arduino_ESP32QSPI::POLL_END()
   // }
 }
 
+/**
+ * @brief Queue a transaction asynchronously - returns immediately
+ */
+bool Arduino_ESP32QSPI::queueTrans(uint32_t len)
+{
+  if (_transPending) {
+    return false;  // Already have one pending
+  }
+
+  // Queue the transaction (non-blocking)
+  esp_err_t ret = spi_device_queue_trans(_handle, _spi_tran, 0);  // 0 = no wait if queue full
+  if (ret == ESP_OK) {
+    _transPending = true;
+    _lastTransLen = len;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @brief Wait for queued transaction to complete
+ */
+bool Arduino_ESP32QSPI::waitTransComplete(uint32_t timeout_ms)
+{
+  if (!_transPending) {
+    return true;  // Nothing pending
+  }
+
+  spi_transaction_t *rtrans = nullptr;
+  esp_err_t ret = spi_device_get_trans_result(_handle, &rtrans, pdMS_TO_TICKS(timeout_ms));
+  if (ret == ESP_OK) {
+    _transPending = false;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @brief Check if transaction is complete (non-blocking)
+ */
+bool Arduino_ESP32QSPI::isTransComplete()
+{
+  if (!_transPending) {
+    return true;
+  }
+
+  spi_transaction_t *rtrans = nullptr;
+  esp_err_t ret = spi_device_get_trans_result(_handle, &rtrans, 0);  // 0 = non-blocking
+  if (ret == ESP_OK) {
+    _transPending = false;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @brief Begin async write - sets up address window and asserts CS
+ */
+void Arduino_ESP32QSPI::beginAsyncWrite()
+{
+  // Queue a dummy transaction just to assert CS LOW
+  // The actual pixel data will be queued in asyncWritePixels
+  _spi_tran_ext.base.flags = SPI_TRANS_MODE_QIO;
+  _spi_tran_ext.base.cmd = 0x32;
+  _spi_tran_ext.base.addr = 0x003C00;
+  _spi_tran_ext.base.tx_buffer = nullptr;
+  _spi_tran_ext.base.length = 0;
+
+  esp_err_t ret = spi_device_queue_trans(_handle, _spi_tran, portMAX_DELAY);
+  if (ret != ESP_OK) {
+    log_e("beginAsyncWrite: queue_trans error: %d", ret);
+  }
+}
+
+/**
+ * @brief Queue entire pixel buffer as ONE async transaction
+ */
+void Arduino_ESP32QSPI::asyncWriteAllPixels(uint16_t *data, uint32_t totalLen)
+{
+  // For CO5300, we pack pixels into the internal buffer and send as one transfer
+  // This only works if totalLen <= SPI_MAX_PIXELS_AT_ONCE
+  // For larger transfers, we need to do chunked transfers
+
+  uint32_t len = totalLen;
+  uint32_t offset = 0;
+
+  while (len > 0)
+  {
+    uint32_t chunk = (len > SPI_MAX_PIXELS_AT_ONCE) ? SPI_MAX_PIXELS_AT_ONCE : len;
+
+    // Copy chunk to our buffer with pixel packing
+    uint32_t l2 = chunk >> 1;
+    uint16_t *src = data + offset;
+    for (uint32_t i = 0; i < l2; ++i)
+    {
+      MSB_32_16_16_SET(_buffer32[i], src[i * 2], src[i * 2 + 1]);
+    }
+    if (chunk & 1)
+    {
+      MSB_16_SET(_buffer16[chunk - 1], src[chunk - 1]);
+    }
+
+    bool first_send = (offset == 0);
+    if (first_send)
+    {
+      _spi_tran_ext.base.flags = SPI_TRANS_MODE_QIO;
+      _spi_tran_ext.base.cmd = 0x32;
+      _spi_tran_ext.base.addr = 0x003C00;
+    }
+    else
+    {
+      _spi_tran_ext.base.flags = SPI_TRANS_MODE_QIO | SPI_TRANS_VARIABLE_CMD |
+                                 SPI_TRANS_VARIABLE_ADDR | SPI_TRANS_VARIABLE_DUMMY;
+    }
+
+    _spi_tran_ext.base.tx_buffer = _buffer32;
+    _spi_tran_ext.base.length = chunk << 4;  // 16 bits per pixel
+
+    esp_err_t ret = spi_device_queue_trans(_handle, _spi_tran, portMAX_DELAY);
+    if (ret != ESP_OK) {
+      log_e("asyncWriteAllPixels: queue_trans error: %d", ret);
+      break;
+    }
+
+    _transPending = true;
+    offset += chunk;
+    len -= chunk;
+
+    // For non-first chunks, we need to handle the fact that _spi_tran is reused
+    // Each queue_trans reuses _spi_tran, so we need to be careful about timing
+    if (!first_send) {
+      // Wait for previous transaction before queueing next
+      spi_transaction_t *rtrans = nullptr;
+      spi_device_get_trans_result(_handle, &rtrans, portMAX_DELAY);
+    }
+  }
+}
+
+/**
+ * @brief End async write - deassert CS
+ */
+void Arduino_ESP32QSPI::endAsyncWrite()
+{
+  // Assert CS HIGH
+  CS_HIGH();
+
+  // Wait for the last transaction to complete
+  spi_transaction_t *rtrans = nullptr;
+  esp_err_t ret = spi_device_get_trans_result(_handle, &rtrans, 10000);  // 10s timeout
+
+  if (ret != ESP_OK) {
+    log_e("endAsyncWrite: get_trans_result error: %d", ret);
+  }
+
+  _transPending = false;
+}
+
+/**
+ * @brief Queue a single transaction and return immediately (non-blocking)
+ */
+bool Arduino_ESP32QSPI::queueSingleTrans(uint16_t *data, uint32_t len)
+{
+  if (_transPending) {
+    return false;  // Already have one pending
+  }
+
+  // Pack into our buffer
+  uint32_t l2 = len >> 1;
+  for (uint32_t i = 0; i < l2; ++i)
+  {
+    MSB_32_16_16_SET(_buffer32[i], data[i * 2], data[i * 2 + 1]);
+  }
+  if (len & 1)
+  {
+    MSB_16_SET(_buffer16[len - 1], data[len - 1]);
+  }
+
+  _spi_tran_ext.base.flags = SPI_TRANS_MODE_QIO;
+  _spi_tran_ext.base.cmd = 0x32;
+  _spi_tran_ext.base.addr = 0x003C00;
+  _spi_tran_ext.base.tx_buffer = _buffer32;
+  _spi_tran_ext.base.length = len << 4;
+
+  esp_err_t ret = spi_device_queue_trans(_handle, _spi_tran, 0);  // 0 = non-blocking
+  if (ret == ESP_OK) {
+    _transPending = true;
+    _lastTransLen = len;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @brief Wait for pending transaction to complete
+ */
+bool Arduino_ESP32QSPI::waitSingleTrans(uint32_t timeout_ms)
+{
+  if (!_transPending) {
+    return true;
+  }
+
+  spi_transaction_t *rtrans = nullptr;
+  esp_err_t ret = spi_device_get_trans_result(_handle, &rtrans, pdMS_TO_TICKS(timeout_ms));
+  if (ret == ESP_OK) {
+    _transPending = false;
+    return true;
+  }
+  return false;
+}
+
 #endif // #if defined(ESP32)

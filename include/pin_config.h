@@ -1,15 +1,19 @@
-/*
- * @Description: None
- * @Author: LILYGO_L
- * @Date: 2023-06-05 13:01:59
- * @LastEditTime: 2026-04-21 16:38:28
- */
 #pragma once
 
-// 这里选择你使用的屏幕
 //  #define DO0143FAT01 //DO0143FMST02//1.43 inches (SH8601 FT3168)
 #define H0175Y003AM // 1.75 inches (CO5300 CST9217)
 // #define DO0143FMST10 //1.43 inches (CO5300 FT3168)
+
+//  #define SPI_FREQUENCY 10000000
+// #define SPI_FREQUENCY 20000000
+// #define SPI_FREQUENCY 40000000
+#define SPI_FREQUENCY 80000000
+// #define SPI_FREQUENCY 80000000
+//  SPI Mode, SPI_MODE0, set by Arduino_CO5300::begin().
+//  SPI Host, SPI2_HOST, set by QSPI_SPI_HOST.
+
+#define LCD_WIDTH 466  // physical display horizontal resolution
+#define LCD_HEIGHT 466 // physical display vertical resolution
 
 #define LCD_SDIO0 11
 #define LCD_SDIO1 13
@@ -27,7 +31,7 @@
 #define IIC_SDA 7
 #define IIC_SCL 6
 
-// TOUCH
+// TOUCH (CST9217)
 #define TP_INT 9
 
 // Battery Voltage ADC

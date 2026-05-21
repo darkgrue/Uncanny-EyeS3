@@ -20,6 +20,7 @@
 static EyeProjectConfig s_config;
 static EyeAnimator *s_animator = nullptr;
 static DisplayHAL *s_display = nullptr;
+static AMOLEDDisplay *s_amoledDisplay = nullptr;  // Direct pointer for AMOLED-specific access
 static WiiChuckInput *s_wiiChuck = nullptr;
 static EyeSyncManager *s_syncManager = nullptr;
 static EyeInterpolator *s_interpolator = nullptr;
@@ -112,6 +113,7 @@ void setupDisplay()
     return;
   }
   s_display = &display;
+  s_amoledDisplay = &display;  // Store direct pointer for AMOLED-specific access
   s_config.displayWidth = display.getWidth();
   s_config.displayHeight = display.getHeight();
 #elif IS_TRGB
@@ -228,7 +230,7 @@ void setup()
 
   Serial.println("\nInitialization complete!\n");
 
-  xTaskCreatePinnedToCore(renderLoopTask, "EyeTask", 8192, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(renderLoopTask, "EyeTask", 16384, NULL, 1, NULL, 1);
 }
 
 void renderLoopTask(void *param)
@@ -236,12 +238,7 @@ void renderLoopTask(void *param)
   (void)param;
 
   uint32_t lastFrame = 0;
-  const uint32_t frameInterval = 8333;  // ~120 FPS for smoother animation
-
-  // FPS measurement
-  uint32_t frameCount = 0;
-  uint32_t fpsTimer = millis();
-  uint32_t currentFps = 0;
+  const uint32_t frameInterval = 16667;
 
   while (true)
   {
@@ -250,15 +247,6 @@ void renderLoopTask(void *param)
     if (now - lastFrame >= frameInterval)
     {
       lastFrame = now;
-
-      // Measure actual FPS
-      frameCount++;
-      if (millis() - fpsTimer >= 1000) {
-        currentFps = frameCount;
-        frameCount = 0;
-        fpsTimer = millis();
-        Serial.printf("[FPS] %u\n", currentFps);
-      }
 
 #ifdef DEBUG_OVERLAY_ENABLED
       s_debugOverlay.update();
@@ -280,6 +268,11 @@ void renderLoopTask(void *param)
             0.0f,
             0, 0);
       }
+
+      // TEMP DISABLED: DebugOverlay render uses drawString which conflicts with QSPI
+#ifdef DEBUG_OVERLAY_ENABLED
+      // s_debugOverlay.render();
+#endif
     }
 
     vTaskDelay(1);
@@ -305,6 +298,7 @@ void loop()
 
   delay(10);
 
+  // Call 'T' command to trigger test pattern
   while (Serial.available())
   {
     char c = Serial.read();
@@ -319,6 +313,12 @@ void loop()
       {
         Serial.printf("Invalid eye index. Available: 0-%d\n", s_eyeCount - 1);
       }
+    }
+    else if (c == 'T')
+    {
+      // Trigger test pattern for draw16bitBeRGBBitmap
+      Serial.println("Triggering test pattern...");
+      s_amoledDisplay->drawTestPattern();
     }
   }
 }

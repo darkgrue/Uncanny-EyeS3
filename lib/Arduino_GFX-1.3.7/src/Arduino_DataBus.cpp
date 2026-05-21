@@ -125,53 +125,53 @@ void Arduino_DataBus::sendData16(uint16_t d)
 
 void Arduino_DataBus::batchOperation(const uint8_t *operations, size_t len)
 {
-    for (size_t i = 0; i < len; ++i)
+  for (size_t i = 0; i < len; ++i)
+  {
+    uint8_t l = 0;
+    switch (operations[i])
     {
-        uint8_t l = 0;
-        switch (operations[i])
-        {
-        case BEGIN_WRITE:
-            beginWrite();
-            break;
-        case WRITE_C8_D16:
-            
-            break;
-        case WRITE_C8_D8:
-            writeC8D8(operations[++i], operations[++i]);
-            break;
-        case WRITE_COMMAND_8:
-            writeCommand(operations[++i]);
-            break;
-        case WRITE_C16_D16:
+    case BEGIN_WRITE:
+      beginWrite();
+      break;
+    case WRITE_C8_D16:
 
-            break;
-        case WRITE_COMMAND_16:
+      break;
+    case WRITE_C8_D8:
+      writeC8D8(operations[++i], operations[++i]);
+      break;
+    case WRITE_COMMAND_8:
+      writeCommand(operations[++i]);
+      break;
+    case WRITE_C16_D16:
 
-            break;
-        case WRITE_DATA_8:
-            l = 1;
-            break;
-        case WRITE_DATA_16:
-            l = 2;
-            break;
-        case WRITE_BYTES:
-            l = operations[++i];
-            break;
-        case END_WRITE:
-            endWrite();
-            break;
-        case DELAY:
-            delay(operations[++i]);
-            break;
-        default:
-            printf("Unknown operation id at %d: %d", i, operations[i]);
-            break;
-        }
-        while (l--)
-        {
-            write(operations[++i]);
-        }
+      break;
+    case WRITE_COMMAND_16:
+
+      break;
+    case WRITE_DATA_8:
+      l = 1;
+      break;
+    case WRITE_DATA_16:
+      l = 2;
+      break;
+    case WRITE_BYTES:
+      l = operations[++i];
+      break;
+    case END_WRITE:
+      endWrite();
+      break;
+    case DELAY:
+      delay(operations[++i]);
+      break;
+    default:
+      printf("Unknown operation id at %d: %d", i, operations[i]);
+      break;
     }
+    while (l--)
+    {
+      write(operations[++i]);
+    }
+  }
 }
 
 #if !defined(LITTLE_FOOT_PRINT)

@@ -447,7 +447,6 @@ void Arduino_ESP32SPIDMA::writeRepeat(uint16_t p, uint32_t len)
     uint32_t lo = 0x100 | _data16.lsb;
     uint16_t idx;
     uint8_t shift;
-    uint32_t l;
     uint16_t bufLen = (len <= 28) ? len : 28;
     int16_t xferLen;
     for (uint32_t t = 0; t < bufLen; t++)
@@ -876,10 +875,9 @@ INLINE void Arduino_ESP32SPIDMA::CS_LOW(void)
 INLINE void Arduino_ESP32SPIDMA::POLL_START()
 {
   esp_err_t ret = spi_device_polling_start(_handle, &_spi_tran, portMAX_DELAY);
-  // if (ret != ESP_OK)
-  // {
-  //   log_e("spi_device_polling_start error: %d", ret);
-  // }
+  {
+    log_e("POLL_START(): spi_device_polling_start error: %d", ret);
+  }
 }
 
 /**
@@ -890,10 +888,10 @@ INLINE void Arduino_ESP32SPIDMA::POLL_START()
 INLINE void Arduino_ESP32SPIDMA::POLL_END()
 {
   esp_err_t ret = spi_device_polling_end(_handle, portMAX_DELAY);
-  // if (ret != ESP_OK)
-  // {
-  //   log_e("spi_device_polling_end error: %d", ret);
-  // }
+  if (ret != ESP_OK)
+  {
+    log_e("POLL_END(): spi_device_polling_end error: %d", ret);
+  }
 }
 
 #endif // #if defined(ESP32)

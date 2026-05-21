@@ -22,10 +22,29 @@ public:
     void setBacklight(bool on) override;
     void setBrightness(uint8_t level) override;
 
+    void startWrite() override;
+    void endWrite() override;
+
     bool needsFlush() const override { return true; }
     void flush() override;
 
     void drawString(int16_t x, int16_t y, const char* str, uint16_t color = 0xFFFF) override;
+    void drawRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h) override;
+    void drawSubRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h,
+                          int16_t srcX, int16_t srcY, int16_t srcW, int16_t srcH) override;
+    bool drawRGBBitmapAsync(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h) override;
+    bool isDMATransferBusy() override;
+
+    // Async transfer support (stubbed for RGB panel)
+    bool beginAsyncTransfer() override { return true; }
+    bool writePixelsAsync(uint16_t *pixels, size_t count) override { return true; }
+    bool endAsyncTransfer() override { return true; }
+    bool isAsyncTransferComplete() override { return true; }
+
+    // Software sync for render/display overlap (stubbed for RGB panel)
+    bool beginDisplayTransfer() override { return true; }
+    void endDisplayTransfer() override {}
+    bool isTransferComplete() override { return true; }
 
 private:
     Arduino_DataBus *bus = nullptr;       // Managed by Arduino_GFX library

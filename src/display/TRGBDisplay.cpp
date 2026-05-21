@@ -100,7 +100,16 @@ void TRGBDisplay::setBrightness(uint8_t level) {
     (void)level;
 }
 
+void TRGBDisplay::startWrite() {
+    // RGB panel doesn't need explicit bus management
+}
+
+void TRGBDisplay::endWrite() {
+    // RGB panel doesn't need explicit bus management
+}
+
 void TRGBDisplay::flush() {
+    // RGB display auto-flushes via its own mechanism
 }
 
 void TRGBDisplay::drawString(int16_t x, int16_t y, const char* str, uint16_t color) {
@@ -109,4 +118,32 @@ void TRGBDisplay::drawString(int16_t x, int16_t y, const char* str, uint16_t col
         gfx->setTextColor(color);
         gfx->print(str);
     }
+}
+
+void TRGBDisplay::drawRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h) {
+    if (gfx) {
+        gfx->draw16bitRGBBitmap(x, y, bitmap, w, h);
+    }
+}
+
+void TRGBDisplay::drawSubRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h,
+                                    int16_t srcX, int16_t srcY, int16_t srcW, int16_t srcH) {
+    // RGB panel doesn't support partial updates efficiently
+    // Fall back to full bitmap draw
+    if (gfx) {
+        gfx->draw16bitRGBBitmap(x, y, bitmap, w, h);
+    }
+}
+
+bool TRGBDisplay::drawRGBBitmapAsync(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h) {
+    // RGB panel uses different mechanism - for now use sync version
+    if (gfx) {
+        gfx->draw16bitRGBBitmap(x, y, bitmap, w, h);
+    }
+    return true;  // Completed
+}
+
+bool TRGBDisplay::isDMATransferBusy() {
+    // RGB panel handles its own DMA - for now assume not busy
+    return false;
 }

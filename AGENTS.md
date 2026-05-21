@@ -66,7 +66,7 @@ Run these from the project root (where `platformio.ini` lives).
 
 ## platformio.ini Guidelines
 
-- Do not change `[env:...]` section names without updating all references
+- Do not change `[env:...]` section names without asking the user for permission. If permission is given ensure all references are updated.
 - Library dependencies go in `lib_deps`, not manually copied into `lib/`
 - Board-specific flags belong in `build_flags`; keep them commented if experimental
 - Do not hard-code upload ports — use `upload_port = auto` or leave unset when possible
@@ -76,7 +76,7 @@ Run these from the project root (where `platformio.ini` lives).
 ## Libraries
 
 - Prefer PlatformIO's registry (`lib_deps`) over manual installs
-- Pin library versions to avoid breaking changes: `SomeLib @ ^1.2.3`
+- Pin library versions to avoid breaking changes: `SomeLib @ 1.2.3`
 - Document why each library is used in a comment next to its `lib_deps` entry
 
 ---
@@ -86,6 +86,17 @@ Run these from the project root (where `platformio.ini` lives).
 - Use `Serial.begin(115200)` as the default baud rate unless the project specifies otherwise
 - Wrap all debug output in `#ifdef DEBUG_ENABLED` guards so it can be stripped for release builds
 - Do not leave blocking `while(!Serial)` calls in production code
+
+### Serial Port Access Rules
+
+**CRITICAL**: Before attempting to flash firmware or read serial output, you MUST check for and close any serial consoles that may be holding the COM port open. Failure to do so will result in "Access is denied" errors when trying to access the port.
+
+**IMPORTANT**: Do NOT attempt to close serial monitor processes yourself. Always pause and ask the user with a question prompt to close any serial consoles (PlatformIO monitor, Arduino IDE Serial Monitor, PuTTY, etc.) before proceeding with flash or serial read operations.
+
+When you need the user to close serial monitors:
+1. Explicitly ask the user to close all serial console programs
+2. Wait for confirmation before proceeding
+3. After closing, wait 2-3 seconds for the port to be fully released
 
 ---
 

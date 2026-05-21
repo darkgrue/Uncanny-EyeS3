@@ -1,0 +1,324 @@
+#include "EyeRenderer.h"
+#include <Arduino.h>
+#include <pgmspace.h>
+
+EyeRenderer::EyeRenderer()
+    : m_display(nullptr)
+    , m_displaySize(0)
+    , m_mapRadius(0)
+    , m_mapDiameter(0)
+    , m_eyeDef(nullptr)
+    , m_columnBuf(nullptr)
+    , m_framebuffer(nullptr) {
+}
+
+EyeRenderer::~EyeRenderer() {
+    if (m_columnBuf) {
+        delete[] m_columnBuf;
+        m_columnBuf = nullptr;
+    }
+    if (m_framebuffer) {
+        delete[] m_framebuffer;
+        m_framebuffer = nullptr;
+    }
+}
+
+bool EyeRenderer::begin(DisplayHAL* display, const EyeDefinition& eyeDef) {
+    m_display = display;
+    m_eyeDef = &eyeDef;
+    m_displaySize = display->getWidth();
+    if (display->getHeight() < m_displaySize) {
+        m_displaySize = display->getHeight();
+    }
+    m_mapRadius = eyeDef.polarMap.radius;
+    m_mapDiameter = m_mapRadius * 2;
+
+    // Allocate column buffer
+    if (m_columnBuf) delete[] m_columnBuf;
+    m_columnBuf = new uint16_t[m_displaySize];
+
+    // Allocate full framebuffer for batch rendering
+    if (m_framebuffer) delete[] m_framebuffer;
+    m_framebuffer = new uint16_t[m_displaySize * m_displaySize];
+
+    // Precompute circular clip bounds for the eye
+    uint16_t eyeRadius = eyeRadiusPixels(eyeDef);
+    int centerX = m_displaySize / 2;
+    int centerY = m_displaySize / 2;
+    m_clip.compute(centerX, centerY, eyeRadius, m_displaySize, m_displaySize);
+
+    return true;
+}
+
+bool EyeRenderer::beginFramebuffers() {
+    // Already allocated in begin()
+    return (m_framebuffer != nullptr);
+}
+
+// Helper function to get texture color with coordinate wrapping
+static inline uint16_t getTextureColor(const uint16_t* data, uint16_t w, uint16_t h,
+                                        int32_t x, int32_t y) {
+    if (x < 0) x += w * (-(x / w) + 1);
+    if (y < 0) y += h * (-(y / h) + 1);
+    x %= w;
+    y %= h;
+    return data[y * w + x];
+}
+
+// Fixed-point texture coordinate calculation helper
+// Uses 16-bit fractional part (fixed-point Q16)
+static inline int32_t fixedMul(int32_t a, int32_t b) {
+    return (a * b) >> 16;
+}
+
+void EyeRenderer::renderColumn(int x, float eyeX, float eyeY, float pupilFactor,
+                               float upperLidFactor, float lowerLidFactor, float blinkFactor,
+                               uint16_t irisAngle, uint16_t scleraAngle) {
+    if (!m_eyeDef || !m_display) {
+        Serial.println("[EyeRenderer] ERROR: missing eyeDef or display");
+        return;
+    }
+
+    const uint16_t DISPLAY_W = m_displaySize;
+    const uint16_t DISPLAY_H = m_displaySize;
+    const int16_t MAP_RADIUS = m_mapRadius;
+    const int16_t MAP_DIAMETER = m_mapDiameter;
+
+    const EyeDefinition& eye = *m_eyeDef;
+
+    // Debug: Check eye data validity on first call
+    static bool s_debuggedEye = false;
+    if (!s_debuggedEye) {
+        s_debuggedEye = true;
+        Serial.printf("[EyeRenderer] DEBUG eye data:\n");
+        Serial.printf("  name=%s\n", eye.name);
+        Serial.printf("  radiusFraction=%.2f\n", eye.radiusFraction);
+        Serial.printf("  backColor=0x%04X\n", eye.backColor);
+        Serial.printf("  dispMap ptr=%p\n", (void*)eye.dispMap);
+        Serial.printf("  pupil.color=0x%04X\n", eye.pupil.color);
+        Serial.printf("  iris.color=0x%04X\n", eye.iris.color);
+        Serial.printf("  sclera.color=0x%04X\n", eye.sclera.color);
+        Serial.printf("  eyelid.color=0x%04X\n", eye.eyelid.color);
+        Serial.printf("  polarMap.radius=%u\n", eye.polarMap.radius);
+        Serial.printf("  polarMap.angleMap ptr=%p\n", (void*)eye.polarMap.angleMap);
+        Serial.printf("  polarMap.distMap ptr=%p\n", (void*)eye.polarMap.distMap);
+        Serial.printf("  mapRadius=%d mapDiameter=%d\n", m_mapRadius, m_mapDiameter);
+        Serial.printf("  eyelid.upper ptr=%p\n", (void*)eye.eyelid.upper);
+        Serial.printf("  eyelid.lower ptr=%p\n", (void*)eye.eyelid.lower);
+    }
+
+    // Calculate eye radius and iris radius from fraction
+    uint16_t eyeRadius = eyeRadiusPixels(eye);
+    uint16_t irisRadius = irisRadiusPixels(eye);
+    
+    // Calculate eye position in pixels (from normalized -1.0 to +1.0)
+    int16_t eyePixelX = (int16_t)(eyeX * (float)(DISPLAY_W / 2));
+    int16_t eyePixelY = (int16_t)(eyeY * (float)(DISPLAY_H / 2));
+    
+    // Position offset relative to display center
+    int16_t xOffset = x - (DISPLAY_W / 2);
+    
+// Calculate eyelid boundaries from lookup tables
+    uint16_t lidIdx = x * 2;
+    uint8_t upperStart = pgm_read_byte(&eye.eyelid.upper[lidIdx]);
+    uint8_t upperEnd = pgm_read_byte(&eye.eyelid.upper[lidIdx + 1]);
+    uint8_t lowerStart = pgm_read_byte(&eye.eyelid.lower[lidIdx]);
+    uint8_t lowerEnd = pgm_read_byte(&eye.eyelid.lower[lidIdx + 1]);
+
+    // If 255, no eyelid defined for this column
+    if (upperStart == 255) upperStart = 0;
+    if (upperEnd == 255) upperEnd = 255;
+    if (lowerStart == 255) lowerStart = 0;
+    if (lowerEnd == 255) lowerEnd = 255;
+
+    // DEBUG: Print eyelid values for first few columns
+    static int s_lidDebug = 0;
+    if (s_lidDebug < 5) {
+        s_lidDebug++;
+        Serial.printf("[EyeRenderer] lid x=%d: upper=%u/%u lower=%u/%u\n",
+                     x, upperStart, upperEnd, lowerStart, lowerEnd);
+    }
+
+    // Apply lid factors and blink
+    // NOTE: eyelid tables are ALL ZEROS in current eye data - this means eyelids cover everything!
+    // Override to ensure eye is visible for testing
+    float upperPos = upperStart + upperLidFactor * (upperEnd - upperStart);
+    float lowerPos = lowerStart + lowerLidFactor * (lowerEnd - lowerStart);
+
+    // DEBUG: Force open eyelids to test display pipeline
+    // With eyelid tables = 0, normal calculation gives y1=y2=0, hiding the eye
+    // Force minimum eye height of 100 pixels
+    if (lowerPos - upperPos < 100) {
+        upperPos = 150;
+        lowerPos = 316;
+    }
+
+    upperPos = upperPos * (1.0f - blinkFactor);
+    lowerPos = lowerPos * (1.0f - blinkFactor);
+    
+    int16_t y1 = (int16_t)lowerPos;  // Bottom of visible eye
+    int16_t y2 = (int16_t)upperPos;  // Top of visible eye
+    y1 = constrain(y1, 0, DISPLAY_H - 1);
+    y2 = constrain(y2, 0, DISPLAY_H - 1);
+    
+    // Calculate scaling factors from actual iris radius
+    int16_t irisRadiusMap = (MAP_RADIUS * irisRadius) / eyeRadius;
+    int16_t pupilRadiusMap = (int16_t)((float)irisRadiusMap * pupilFactor);
+    
+// Get displacement map for spherical correction
+    int16_t dispX;
+    int16_t dispIdx;
+    int16_t halfW = DISPLAY_W / 2;
+    int16_t halfH = DISPLAY_H / 2;
+
+    if (x < halfW) {
+        dispIdx = ((halfW - 1) - x) * halfH;
+        dispX = -(int8_t)pgm_read_byte(&eye.dispMap[dispIdx]);
+    } else {
+        dispIdx = (x - halfW) * halfH;
+        dispX = (int8_t)pgm_read_byte(&eye.dispMap[dispIdx]);
+    }
+
+uint16_t* colBuf = m_columnBuf;
+
+    // Debug: check what we're setting y1, y2 to and if we're entering inside/outside
+    static int s_yDebug = 0;
+    if (s_yDebug < 3) {
+        s_yDebug++;
+        Serial.printf("[EyeRenderer] DEBUG y: x=%d y1=%d y2=%d upperPos=%.1f lowerPos=%.1f\n",
+                      x, y1, y2, upperPos, lowerPos);
+    }
+
+    int s_enteredInside = 0;
+    for (int16_t y = 0; y < DISPLAY_H; y++) {
+        // y1=lowerPos=bottom (larger y), y2=upperPos=top (smaller y)
+        // Inside eye if y >= y2 (top) AND y <= y1 (bottom)
+        // Outside eye if y < y2 (above top) OR y > y1 (below bottom)
+        if (y < y2 || y > y1) {
+            // Outside eye area - eyelid color
+            *colBuf++ = eye.eyelid.color;
+} else {
+            s_enteredInside++;
+            // Inside eye area - lookup polar coordinates
+            int16_t mapX = xOffset + dispX + eyePixelX + MAP_RADIUS;
+            int16_t mapY = y - (DISPLAY_H / 2) + dispX + eyePixelY + MAP_RADIUS;
+
+            // Clamp to map bounds
+            mapX = constrain(mapX, 0, MAP_DIAMETER - 1);
+            mapY = constrain(mapY, 0, MAP_DIAMETER - 1);
+
+int mapIdx = mapY * MAP_DIAMETER + mapX;
+
+            // Read polar map data (these are in PROGMEM)
+            uint8_t angle = pgm_read_byte(&eye.polarMap.angleMap[mapIdx]);
+            uint8_t dist = pgm_read_byte(&eye.polarMap.distMap[mapIdx]);
+
+            if (dist < 128) {
+                // Sclera (0-127 in polar dist = outer to iris boundary)
+                *colBuf++ = eye.sclera.color;
+            } else if (dist < 255) {
+                // Iris/pupil (128-254 = iris/pupil region, 255 = off map)
+                int8_t irisDist = dist - 128;  // 0-126
+
+                if (irisDist > pupilRadiusMap) {
+                    // Iris (outside pupil) - should be iris.color
+                    *colBuf++ = eye.iris.color;
+                } else {
+                    // Pupil - should be pupil.color
+                    *colBuf++ = eye.pupil.color;
+                }
+            } else {
+                // Behind sphere or off map - backColor
+                *colBuf++ = eye.backColor;
+            }
+
+            // Debug: print dist values for first few inside-eye pixels
+            static int s_distPrint = 0;
+            if (s_distPrint < 10) {
+                s_distPrint++;
+                Serial.printf("[EyeRenderer] dist[%d,%d]=%d (colBuf=0x%04X)\n", x, y, dist, *(colBuf-1));
+            }
+        }
+    }
+
+    // Debug: count how many pixels were set to "inside eye"
+    static int s_insideDebug = 0;
+    if (s_insideDebug < 3) {
+        s_insideDebug++;
+        Serial.printf("[EyeRenderer] col %d: enteredInside=%d y1=%d y2=%d\n", x, s_enteredInside, y1, y2);
+    }
+}
+
+void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
+                              float upperLidFactor, float lowerLidFactor, float blinkFactor,
+                              uint16_t irisAngle, uint16_t scleraAngle) {
+    if (!m_display) {
+        return;
+    }
+
+    // Use full-framebuffer rendering for AMOLED
+    renderFullFrame(eyeX, eyeY, pupilFactor, upperLidFactor, lowerLidFactor, blinkFactor, irisAngle, scleraAngle);
+}
+
+void EyeRenderer::renderFullFrame(float eyeX, float eyeY, float pupilFactor,
+                                  float upperLidFactor, float lowerLidFactor, float blinkFactor,
+                                  uint16_t irisAngle, uint16_t scleraAngle) {
+    if (!m_display || !m_eyeDef) {
+        return;
+    }
+
+    const int W = m_displaySize;
+    const int H = m_displaySize;
+    const EyeDefinition& eye = *m_eyeDef;
+
+    static uint32_t s_frameCount = 0;
+
+    // Clear screen to black
+    m_display->clear(0x0000);
+
+    // Calculate eye parameters
+    uint16_t eyeRadius = eyeRadiusPixels(eye);
+    uint16_t irisRadius = irisRadiusPixels(eye);
+
+    // Fixed test radii
+    eyeRadius = 100;
+    irisRadius = 50;
+
+    // Calculate pupil radius
+    int16_t pupilRadius = (int16_t)((float)irisRadius * pupilFactor);
+
+    // Calculate eye center position
+    int16_t eyeCenterX = W / 2 + (int16_t)(eyeX * (float)(W / 2));
+    int16_t eyeCenterY = H / 2 + (int16_t)(eyeY * (float)(H / 2));
+
+    // Pre-fetch colors
+    uint16_t scleraColor = eye.sclera.color;
+    uint16_t irisColor = eye.iris.color;
+    uint16_t pupilColor = eye.pupil.color;
+
+    // Draw concentric circles using fillRect - no framebuffer needed
+    // Outer: sclera (eyeRadius)
+    m_display->fillRect(eyeCenterX - eyeRadius, eyeCenterY - eyeRadius,
+                         eyeRadius * 2, eyeRadius * 2, scleraColor);
+
+    // Middle: iris (irisRadius) - overlay on sclera
+    m_display->fillRect(eyeCenterX - irisRadius, eyeCenterY - irisRadius,
+                         irisRadius * 2, irisRadius * 2, irisColor);
+
+    // Inner: pupil (pupilRadius) - overlay on iris
+    m_display->fillRect(eyeCenterX - pupilRadius, eyeCenterY - pupilRadius,
+                         pupilRadius * 2, pupilRadius * 2, pupilColor);
+
+    // Debug: Print every 60 frames
+    if (++s_frameCount % 60 == 0) {
+        Serial.printf("[renderFullFrame] #%u: eyeRadius=%u center=(%d,%d)\n",
+                      s_frameCount, eyeRadius, eyeCenterX, eyeCenterY);
+        Serial.printf("  irisRadius=%u pupilRadius=%d\n", irisRadius, pupilRadius);
+    }
+}
+
+ 
+ v o i d   E y e R e n d e r e r : : r e n d e r F r a m e U s i n g C o l u m n s ( f l o a t   e y e X ,   f l o a t   e y e Y ,   f l o a t   p u p i l F a c t o r , 
+ 
+                                                                                 f l o a t   u p p e r L i d F a c t o r ,   f l o a t   l o w e r L i d F a c t o r ,   f l o a t   b l i n k F a c t o r , 
+ 

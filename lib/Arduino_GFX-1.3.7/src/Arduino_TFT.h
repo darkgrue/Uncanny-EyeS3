@@ -70,6 +70,10 @@ protected:
   uint16_t _currentW, _currentH;
   int8_t _override_datamode = GFX_NOT_DEFINED;
 
+public:
+  // Allow access to the data bus for async operations
+  Arduino_DataBus *getDataBus() { return _bus; }
+
 private:
 };
 

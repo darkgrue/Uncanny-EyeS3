@@ -70,8 +70,8 @@ private:
     uint32_t m_moveStartTime = 0;
     uint32_t m_moveDuration = 0;
     
-uint32_t m_minDuration = 83;     // ~1/12 sec
-    uint32_t m_maxDuration = 166;    // ~1/6 sec
+uint32_t m_minDuration = 250;     // 250ms - smoother movement
+    uint32_t m_maxDuration = 500;    // 500ms - natural saccade speed
     
     uint32_t m_saccadeDelayAfterTrack = 2000;  // Delay before starting random movement after losing target
     uint32_t m_lastTrackTime = 0;             // Timestamp of last valid target

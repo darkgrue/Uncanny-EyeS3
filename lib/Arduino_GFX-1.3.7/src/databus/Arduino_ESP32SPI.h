@@ -14,7 +14,9 @@
 #include "soc/dport_reg.h"
 #endif
 
+#ifndef SPI_MAX_PIXELS_AT_ONCE
 #define SPI_MAX_PIXELS_AT_ONCE 32
+#endif
 
 class Arduino_ESP32SPI : public Arduino_DataBus
 {
