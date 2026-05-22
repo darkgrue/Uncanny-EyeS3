@@ -9,7 +9,7 @@
  */
 #include <Arduino.h>
 #include <Arduino_GFX_Library.h>
-#include "pin_config.h"
+#include "BoardPins.h"
 // #include "material_24Bit_480x480.h"
 #include "material_16Bit_480x480.h"
 // #include "material_24Bit_128x128.h"

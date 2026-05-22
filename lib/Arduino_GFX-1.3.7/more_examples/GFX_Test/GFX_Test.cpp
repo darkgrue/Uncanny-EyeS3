@@ -8,7 +8,7 @@
  * Start of Arduino_GFX setting
  ******************************************************************************/
 #include "Arduino_GFX_Library.h"
-#include "pin_config.h"
+#include "BoardPins.h"
 
 int32_t w, h, n, n1, cx, cy, cx1, cy1, cn, cn1;
 uint8_t tsa, tsb, tsc, ds;

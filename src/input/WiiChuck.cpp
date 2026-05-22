@@ -7,7 +7,7 @@
  * Joystick is decoded from bytes 0-1 (centered at 0x80) and buttons from byte 5.
  */
 #include "WiiChuck.h"
-#include "config/BoardPins.h"
+#include "BoardPins.h"
 #include <Arduino.h>
 
 WiiChuckInput::WiiChuckInput(uint8_t address)

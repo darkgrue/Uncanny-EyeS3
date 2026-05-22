@@ -9,7 +9,7 @@
  */
 
 #include "Arduino_DriveBus_Library.h"
-#include "pin_config.h"
+#include "BoardPins.h"
 
 static size_t CycleTime = 0;
 

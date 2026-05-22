@@ -10,7 +10,7 @@
  * Even dimensions are enforced throughout (CO5300 requires 16-bit aligned writes).
  */
 #include "AMOLEDDisplay.h"
-#include "pin_config.h"
+#include "BoardPins.h"
 #include "Arduino_TFT.h"
 #include "../lib/Arduino_GFX-1.3.7/src/databus/Arduino_ESP32QSPI.h"
 

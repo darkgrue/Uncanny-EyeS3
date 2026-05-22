@@ -6,7 +6,7 @@
 #include "Arduino_GFX.h"
 #include "Arduino_TFT.h"
 #include "font/glcdfont.h"
-#include "pin_config.h"
+#include "BoardPins.h"
 
 Arduino_TFT::Arduino_TFT(
     Arduino_DataBus *bus, int8_t rst, uint8_t r,

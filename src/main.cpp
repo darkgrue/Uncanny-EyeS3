@@ -26,7 +26,7 @@
 #include "debug/DebugOverlay.h"
 #include "eyes.h"
 #include "EyeLibrary.h"
-#include "pin_config.h"
+#include "BoardPins.h"
 #include <Wire.h>
 
 #define CURRENT_EYE default_eye::eye
@@ -50,17 +50,6 @@ std::unique_ptr<Arduino_IIC> SY6970(new Arduino_SY6970(IIC_Bus, SY6970_DEVICE_AD
 
 std::unique_ptr<Arduino_IIC> PCF8563(new Arduino_PCF8563(IIC_Bus, PCF8563_DEVICE_ADDRESS,
                                                          DRIVEBUS_DEFAULT_VALUE, DRIVEBUS_DEFAULT_VALUE));
-
-#if defined(ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED)
-#define IS_AMOLED 1
-#define IS_TRGB 0
-#elif defined(ARDUINO_LILYGO_T_RGB)
-#define IS_AMOLED 0
-#define IS_TRGB 1
-#else
-#define IS_AMOLED 0
-#define IS_TRGB 0
-#endif
 
 void renderLoopTask(void *param);
 
@@ -136,7 +125,7 @@ void setupSY6970()
  */
 void setupDisplay()
 {
-#if IS_AMOLED
+#if ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED
   static AMOLEDDisplay display;
   if (!display.begin())
   {
@@ -266,9 +255,9 @@ void setup()
   Serial.println("===========================================");
   Serial.println("Uncanny Eyes for ESP32");
   Serial.print("Board: ");
-#if IS_AMOLED
+#if ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED
   Serial.println("T-Display S3 AMOLED");
-#elif IS_TRGB
+#elif ARDUINO_LILYGO_T_RGB
   Serial.println("T-RGB");
 #else
   Serial.println("Unknown");
@@ -326,7 +315,7 @@ void renderLoopTask(void *param)
   (void)param;
 
   uint32_t lastFrame = 0;
-  const uint32_t frameInterval = 8333;  // ~120 FPS for smoother animation
+  const uint32_t frameInterval = 8333; // ~120 FPS for smoother animation
 
   // FPS measurement
   uint32_t frameCount = 0;
@@ -343,7 +332,8 @@ void renderLoopTask(void *param)
 
       // Measure actual FPS
       frameCount++;
-      if (millis() - fpsTimer >= 1000) {
+      if (millis() - fpsTimer >= 1000)
+      {
         currentFps = frameCount;
         frameCount = 0;
         fpsTimer = millis();
@@ -370,7 +360,7 @@ void renderLoopTask(void *param)
         float pupilFactor = s_animator->getPupilFactor();
         float blinkFactor = s_animator->getBlinkFactor();
 
-        EyeRenderer* renderer = s_animator->getRenderer();
+        EyeRenderer *renderer = s_animator->getRenderer();
         float upperLidFactor = renderer->getUpperLidFactor();
         float lowerLidFactor = renderer->getLowerLidFactor();
 

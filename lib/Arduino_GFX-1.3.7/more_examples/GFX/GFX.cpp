@@ -9,7 +9,7 @@
  */
 #include <Arduino.h>
 #include "Arduino_GFX_Library.h"
-#include "pin_config.h"
+#include "BoardPins.h"
 
 // NFP099B-01A
 // Arduino_DataBus *bus = new Arduino_SWSPI(

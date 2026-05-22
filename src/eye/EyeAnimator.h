@@ -161,8 +161,8 @@ private:
   float m_irisTarget = 0.0f;                  // Target iris offset (-0.5 to +0.5)
   float m_irisSmooth = 0.0f;                  // Smoothed iris value after easing
   uint32_t m_lastIrisChange = 0;              // Timestamp of last target change
-  uint32_t m_irisHoldDuration = 3000000;      // Hold time between changes (3s)
-  uint32_t m_irisTransitionDuration = 800000; // Transition duration (800ms)
+  uint32_t m_irisHoldDuration = 3000;      // Hold time between changes (ms)
+  uint32_t m_irisTransitionDuration = 800; // Transition duration (ms)
 
   bool m_booped = false;      // True when boop expression is active
   bool m_needsRender = true;  // Flag to request a new frame render

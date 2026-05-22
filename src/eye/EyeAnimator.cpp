@@ -245,7 +245,7 @@ bool EyeAnimator::broadcastState()
  */
 void EyeAnimator::updateLightSensor(uint32_t now)
 {
-  constexpr uint32_t LIGHT_INTERVAL = 100000; // 10 Hz max polling
+  constexpr uint32_t LIGHT_INTERVAL = 100; // 10 Hz max polling (100ms)
 
   if (now - m_lastLightRead < LIGHT_INTERVAL)
     return;
@@ -276,6 +276,9 @@ void EyeAnimator::updateIrisAutonomous(uint32_t now)
 
   if (dt >= m_irisHoldDuration)
   {
+    // Save current smooth value as the starting point for the new transition.
+    m_irisPrev[0] = m_irisSmooth;
+
     float u1 = (float)random(0, 1000) / 1000.0f;
     float u2 = (float)random(0, 1000) / 1000.0f;
 
@@ -284,10 +287,11 @@ void EyeAnimator::updateIrisAutonomous(uint32_t now)
 
     m_irisTarget = constrain(lognormalSample, -0.3f, 0.3f);
 
-    m_irisHoldDuration = 2000000 + random(0, 3000000);
-    m_irisTransitionDuration = 600000 + random(0, 400000);
+    m_irisHoldDuration = 2000 + random(0, 3000);
+    m_irisTransitionDuration = 600 + random(0, 400);
 
     m_lastIrisChange = now;
+    dt = 0; // Reset so the transition calculation below starts from 0.
   }
 
   float t = (float)dt / (float)m_irisTransitionDuration;
@@ -296,11 +300,6 @@ void EyeAnimator::updateIrisAutonomous(uint32_t now)
   float eased = t * t * (3.0f - 2.0f * t);
 
   m_irisSmooth = m_irisPrev[0] + (m_irisTarget - m_irisPrev[0]) * eased;
-
-  if (dt >= m_irisHoldDuration)
-  {
-    m_irisPrev[0] = m_irisTarget;
-  }
 
   float sum = 0.5f + m_irisSmooth;
   sum = constrain(sum, 0.3f, 0.7f);

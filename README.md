@@ -1,51 +1,133 @@
 # Uncanny-EyeS3
 
-A port of the Adafruit M4 Eyes (<https://github.com/adafruit/Adafruit_Learning_System_Guides/tree/main/M4_Eyes>) to the Lilygo T-Display S3 AMOLED (466x466) and T-RGB (480x480).
+A port of the [Adafruit M4 Eyes](https://github.com/adafruit/Adafruit_Learning_System_Guides/tree/main/M4_Eyes) project to the LilyGo T-Display S3 AMOLED and T-RGB, with ESP32-specific rendering optimizations, WiiChuck puppeteering, light-driven pupil control, and multi-device synchronization over ESP-NOW.
 
-Supports WiiChuck manual puppeteering of the eyes.
+---
 
-TODO: Support for the Gravity Offline Edge AI Gesture & Face Detection Sensor (<https://www.dfrobot.com/product-2914.html>).
+## Supported Hardware
 
+| Board                      | Display                | Controller | Resolution |
+| -------------------------- | ---------------------- | ---------- | ---------- |
+| LilyGo T-Display S3 AMOLED | CO5300 (QSPI @ 80 MHz) | ESP32-S3   | 466×466    |
+| LilyGo T-RGB               | ST7701S (DPI)          | ESP32-S3   | 480×480    |
 
-## Supported Displays
+**Optional peripherals:**
 
-| Display | Resolution | Map Radius |
-|---------|------------|------------|
-| T-Display S3 AMOLED | 466x466 | 233 |
-| T-RGB | 480x480 | 240 |
-| Default (testing) | 240x240 | 120 |
+- Nintendo Wii Nunchuk (WiiChuck) — I2C puppeteering controller
+- LDR photoresistor — ambient light-driven pupil dilation
+- SY6970 — battery fuel gauge / charger (on-board, auto-initialized)
 
-**Note:** Eye size is now configured as a fraction of the display's smaller dimension, making eye definitions work across all display sizes without modification.
+---
 
+## Features
 
-## Eye Configuration Files
+- **Autonomous animation** — saccadic eye movement with a lognormal amplitude distribution, centering bias, and sigmoid velocity easing for naturalistic motion
+- **Realistic blinking** — three-phase FSM (close → pause → open) with randomized timing and burst probability
+- **WiiChuck puppeteering** — joystick-driven eye targeting with edge-triggered blink/boop and hold commands for close/wide expressions
+- **Light sensor pupil control** — photoresistor drives pupil dilation; falls back to autonomous iris animation when not connected
+- **Multi-eye ESP-NOW sync** — one device acts as controller, others follow with interpolated state at up to ~120 FPS
+- **Runtime eye switching** — switch between registered eye designs over serial without reflashing
+- **Double-buffered PSRAM rendering** — two RGB565 frame buffers with dirty-region tracking minimize display transfer overhead
+- **User extension hooks** — `user_setup()` / `user_loop()` for custom sensor integrations
 
-Eye definitions are stored as JSON files (`.eye`) in subdirectories under `resources/eyes/`. Each eye configuration has its own folder containing the `.eye` file and any associated textures.
+---
 
+## Building
+
+Requires [PlatformIO](https://platformio.org/).
+
+```bash
+# Build
+pio run -e amoled          # T-Display S3 AMOLED (466×466)
+pio run -e trgb            # T-RGB (480×480)
+
+# Build and upload
+pio run -e amoled --target upload
+pio run -e trgb --target upload
+
+# Serial monitor (115200 baud)
+pio device monitor
 ```
+
+---
+
+## How It Works
+
+### Rendering Pipeline
+
+The firmware runs two FreeRTOS tasks on separate cores:
+
+- **Core 1 — render task (~120 FPS):** `EyeAnimator::update()` advances the movement, blink, and iris state machines each frame. When `needsRender()` is true, `EyeRenderer::renderFrame()` draws the eye into the current PSRAM render buffer column by column using precomputed polar and displacement lookup tables. Dirty region tracking limits each display transfer to only the pixels that changed.
+- **Core 0 — Arduino `loop()`:** Handles serial commands and prints a status line every 5 seconds.
+
+### Eye Rendering
+
+Each eye is defined by a precomputed set of lookup tables baked into a C++ header by `tablegen.py`:
+
+- **Polar angle / distance maps** — map every pixel in the display circle to a polar coordinate in texture space
+- **Spherical displacement map** — simulates the curvature of an eyeball
+- **Eyelid tables** (optional) — per-column upper/lower eyelid Y positions for custom lid shapes
+
+At runtime, `EyeRenderer` uses these tables to look up the correct iris, sclera, or pupil color for each pixel in O(1) per pixel. The circular clipping bounds are precomputed once into per-scanline start/end X values, avoiding `sqrt()` per pixel.
+
+### Eye Movement
+
+`EyeMovement` generates saccades using a lognormal amplitude distribution (matching natural human eye statistics), applies a centering bias after peripheral movements, and eases each movement with a sigmoid curve. Between saccades a configurable fixation pause (default 4–8 s) holds the eye still. When a WiiChuck is attached, direct joystick input overrides the autonomous mode.
+
+### Multi-Eye Sync (ESP-NOW)
+
+Any number of devices running the same firmware can synchronize over ESP-NOW:
+
+1. The device with an active WiiChuck (joystick moved beyond the dead zone) becomes the controller.
+2. The controller broadcasts an `EyeSyncMessage` each frame — eye X/Y, pupil factor, blink state, and expression command.
+3. Follower devices receive the message and apply it via `EyeInterpolator`, which performs linear interpolation between received states for smooth local playback.
+4. If no controller message is received within 100 ms, followers return to autonomous animation.
+
+If no WiiChuck is connected to any device, all units run independently in autonomous mode.
+
+---
+
+## Eye Configuration
+
+### File Layout
+
+Eye definitions live in `resources/eyes/`. Each eye has its own subdirectory:
+
+```text
 resources/eyes/
   default_eye/
-    default_eye.eye   # Eye configuration
-    iris.png          # Optional iris texture (in same folder)
-    sclera.png        # Optional sclera texture (in same folder)
-  another_eye/
-    another_eye.eye
-    upper_lid.png     # Optional custom eyelid shapes
+    default_eye_466.eye    # AMOLED config
+    default_eye_480.eye    # T-RGB config
+    iris.png               # Optional iris texture
+    sclera.png             # Optional sclera texture
+    upper_lid.png          # Optional custom eyelid shape (grayscale)
     lower_lid.png
 ```
 
-Copy `default_eye/` to create new eye designs.
+### Generating C++ Headers
 
+Run `tablegen.py` after creating or modifying any `.eye` file. It reads the JSON config and any referenced images, computes all lookup tables, and writes a C++ header to `include/eyes/`.
 
-### Configuration Format
+```bash
+# Regenerate all eyes for both displays
+python resources/eyes/tablegen.py include/ --all amoled
+python resources/eyes/tablegen.py include/ --all trgb
 
-All size values are expressed as fractions (0.0 to 1.0) relative to the display's smaller dimension. This ensures eye configurations work across all supported display sizes without modification.
+# Regenerate a single eye
+python resources/eyes/tablegen.py include/ resources/eyes/default_eye/default_eye_466.eye amoled
+```
+
+Output headers are named `<eye_name>_466.h` (AMOLED) and `<eye_name>_480.h` (T-RGB).
+
+### `.eye` Config Format
+
+All size values are fractions (0.0–1.0) of the display's smaller dimension, so a single config works across display sizes.
 
 ```json
 {
-    "name": "eye_name",
+    "name": "default_eye",
     "radiusFraction": 0.5,
-    "backColor": 31759,
+    "backColor": 0,
     "tracking": true,
     "squint": 0,
     "pupil": {
@@ -75,380 +157,170 @@ All size values are expressed as fractions (0.0 to 1.0) relative to the display'
 }
 ```
 
+| Field                               | Description                                                        |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| `radiusFraction`                    | Eye radius as fraction of the smaller screen dimension             |
+| `backColor`                         | Background color behind the eye (RGB565)                           |
+| `tracking`                          | Eyelids track pupil vertical position                              |
+| `pupil.slitRadius`                  | `0` = round pupil; `>0` = slit pupil                               |
+| `pupil.minFraction` / `maxFraction` | Pupil size range as fraction of iris radius                        |
+| `iris.radiusFraction`               | Iris radius as fraction of eye radius                              |
+| `iris.spin` / `iSpin`               | Continuous spin / fixed per-frame spin override                    |
+| `iris.filename`                     | Optional PNG/BMP texture (relative path, auto-converted to RGB565) |
+| `sclera.filename`                   | Optional sclera texture                                            |
+| `eyelid.upper` / `lower`            | Optional grayscale lid images (must match display resolution)      |
 
-### Field Descriptions
+### Adding a New Eye
 
-**Core:**
-- `name`: Eye identifier (used in filename)
-- `radiusFraction`: Eye radius as fraction of smaller screen dimension (default: 0.5 = 50%)
-- `backColor`: Background color behind eye sphere (RGB565)
-- `tracking`: Enable eye tracking (look at cursor)
-- `squint`: Squint amount 0-255
+1. Create `resources/eyes/<name>/` and write `<name>_466.eye` and `<name>_480.eye`.
 
-**Pupil:**
-- `color`: Pupil color (RGB565)
-- `slitRadius`: 0 = round pupil, >0 = slit pupil
-- `minFraction`: Minimum pupil size as fraction of iris radius
-- `maxFraction`: Maximum pupil size as fraction of iris radius
+2. Generate headers:
 
-**Iris:**
-- `radiusFraction`: Iris radius as fraction of eye radius
-- `color`: Iris color (RGB565)
-- `angle`: Initial rotation (0-1023)
-- `spin`: Continuous spin rate
-- `iSpin`: Fixed per-frame spin override
-- `mirror`: Mirror iris horizontally
+   ```bash
+   python resources/eyes/tablegen.py include/ resources/eyes/<name>/<name>_466.eye amoled
+   python resources/eyes/tablegen.py include/ resources/eyes/<name>/<name>_480.eye trgb
+   ```
 
-**Sclera:**
-- `color`: Sclera (white of eye) color
-- `angle`: Initial rotation (0-1023)
-- `spin`: Continuous spin rate
-- `iSpin`: Fixed per-frame spin override
-- `mirror`: Mirror sclera horizontally
+3. Register in `include/EyeLibrary.h` under both board sections:
 
-**Eyelid:**
-- `color`: Eyelid color (RGB565)
+   ```cpp
+   #include "eyes/<name>_466.h"   // in the AMOLED block
+   // add &<name>::eye to s_eyeRegistry[] and increment s_eyeCount
+   ```
 
+4. Build and test: `pio run -e amoled` / `pio run -e trgb`.
 
-## Generating Eye Headers
-
-Run `tablegen.py` to generate C++ header files from `.eye` configurations. The same `.eye` file uses fractional values that work across all display sizes, but you need to generate headers for each target display to get the appropriate polar map tables.
-
-```bash
-# Generate for all eyes in resources/eyes/ subdirectories
-python resources/eyes/tablegen.py include/ --all amoled
-python resources/eyes/tablegen.py include/ --all trgb
-
-# Generate for a specific eye
-python resources/eyes/tablegen.py include/ resources/eyes/default_eye/default_eye.eye amoled
-```
-
-The script discovers all `.eye` files recursively in `resources/eyes/` subdirectories. Image paths in config files are resolved relative to the `.eye` file's directory, so textures can be placed in the same folder.
-
-
-### Output Location
-
-Generated headers go into `include/` and are named by display type. The header contains the precomputed polar maps and displacement tables specific to each display size:
-- `eye_name_466.h` for AMOLED (466x466)
-- `eye_name_480.h` for T-RGB (480x480)
-- `eye_name_240.h` for default (240x240)
-
-
-## Custom Eyelid Shapes
-
-Eyelid shapes are defined by grayscale images where white = eyelid, black = eye visible. Place images in the same directory as the `.eye` config:
-
-```json
-{
-    "eyelid": {
-        "upper": "upper_lid.png",
-        "lower": "lower_lid.png",
-        "color": 0
-    }
-}
-```
-
-**Resolution Requirements:**
-- Images **must** match the target display resolution exactly
-- For AMOLED (466x466): use 466x466 pixel images
-- For T-RGB (480x480): use 480x480 pixel images
-- The generator rejects mismatched sizes to prevent visual artifacts
-
-
-## Custom Textures (Iris/Sclera)
-
-Image textures for iris or sclera are placed in the same directory as the `.eye` config and referenced with relative paths:
-
-```json
-{
-    "iris": {
-        "filename": "iris_texture.png",
-        "radiusFraction": 0.5,
-        "color": 65281
-    },
-    "sclera": {
-        "filename": "sclera_texture.png"
-    }
-}
-```
-
-**Supported formats:** PNG, BMP (24-bit RGB). Images are converted to RGB565 automatically.
-
-**Resolution Recommendations:**
-- Texture images can be any size but should approximate the rendered pixel size for best quality
-- With default `radiusFraction: 0.5` and `iris.radiusFraction: 0.5`:
-  - AMOLED (466x466): iris renders at ~233 pixels diameter
-  - T-RGB (480x480): iris renders at ~240 pixels diameter
-- Size textures to match these rendered dimensions (233x233 or 240x240 respectively)
-- The same `.eye` config works across all displays (uses fractional sizing), but you generate separate headers per display type
-
-
-## Building
-
-```bash
-# Build for AMOLED
-pio run -e amoled
-
-# Build for T-RGB
-pio run -e trgb
-
-# Upload
-pio run -e amoled --target upload
-```
-
+---
 
 ## Runtime Eye Switching
 
-Eyes can be switched at runtime via serial commands without recompiling.
+Switch the active eye over serial without reflashing:
 
-### Serial Commands
-
-| Command | Description |
-|---------|-------------|
-| `E0` | Switch to first eye (default_eye) |
-| `E1` | Switch to second eye (eagle) |
-| `E<n>` | Switch to eye at index n |
-
-### How It Works
-
-Eye definitions are registered in `include/EyeLibrary.h` which provides:
-- `s_eyeRegistry[]` - array of available eye definitions
-- `s_eyeCount` - total number of eyes
-- `getEyeName(index)` - returns eye name string
-
-When you send `E1` via serial, the command is parsed in `loop()`:
-```cpp
-while (Serial.available()) {
-    char c = Serial.read();
-    if (c == 'E') {
-        int eyeIndex = Serial.parseInt();
-        if (eyeIndex >= 0 && eyeIndex < s_eyeCount) {
-            switchEye(eyeIndex);
-        }
-    }
-}
+```text
+E0    → switch to eye index 0 (default_eye)
+E1    → switch to eye index 1 (eagle)
+E2    → switch to eye index 2 (human_eye)
 ```
 
-The `switchEye()` function calls `EyeAnimator::setEyeIndex()` which:
-1. Validates the index
-2. Updates `m_eyeDef` to point to the new eye
-3. Reinitializes the renderer with the new eye definition
-4. Sets `m_needsRender = true` to trigger a refresh
+The command is parsed in `loop()` and calls `EyeAnimator::setEyeIndex()`, which reinitializes the renderer with the new eye definition.
 
-### Adding New Eyes
+---
 
-**Important:** Each eye configuration requires headers for **both** display types (466 and 480) because the polar map tables and displacement maps are resolution-specific. The same `.eye` config uses fractional sizing that works across all displays, but the generated C++ headers contain precomputed tables for a specific resolution.
-
-1. **Create eye config** in `resources/eyes/<name>/<name>.eye`
-   - Use fractional values (0.0-1.0) for radius and sizing to work across display sizes
-   - Reference texture files (PNG/BMP) with relative paths in the same directory
-   - Reference eyelid images (grayscale) with relative paths for custom shapes
-
-2. **Generate headers for both displays:**
-   ```bash
-   # Generate for AMOLED (466x466)
-   python resources/eyes/tablegen.py include/ resources/eyes/<name>/<name>.eye amoled
-
-   # Generate for T-RGB (480x480)
-   python resources/eyes/tablegen.py include/ resources/eyes/<name>/<name>.eye trgb
-   ```
-   This creates:
-   - `include/<name>_466.h` for AMOLED
-   - `include/<name>_480.h` for T-RGB
-
-3. **Add to EyeLibrary.h registry** under the appropriate display section:
-   ```cpp
-   #if defined(ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED)
-       #include "<name>_466.h"  // AMOLED header
-
-       static const EyeDefinition* const s_eyeRegistry[] = {
-           &default_eye::eye,
-           &eagle::eye,
-           &<name>::eye  // Add your eye here
-       };
-       static constexpr int s_eyeCount = 3;
-
-   #elif defined(ARDUINO_LILYGO_T_RGB)
-       #include "<name>_480.h"  // T-RGB header
-
-       static const EyeDefinition* const s_eyeRegistry[] = {
-           &default_eye::eye,
-           &eagle::eye,
-           &<name>::eye  // Add your eye here
-       };
-       static constexpr int s_eyeCount = 3;
-   #endif
-   ```
-
-**Build and test:**
-```bash
-pio run -e amoled   # Test on AMOLED 466x466
-pio run -e trgb     # Test on T-RGB 480x480
-```
-
-## WiiChuck Controller Connection
-
-The WiiChuck (Nunchuk-style controller) connects to the T-Display S3 AMOLED or T-RGB via the I2C bus.
-
+## WiiChuck Controller
 
 ### Wiring
 
-| WiiChuck Pin | T-Display S3 AMOLED | T-RGB |
-|--------------|---------------------|-------|
-| Data (white) | GPIO 21 (SDA) | GPIO 21 (SDA) |
-| Clock (green) | GPIO 22 (SCL) | GPIO 22 (SCL) |
-| 3.3V (red) | 3.3V | 3.3V |
-| GND (black) | GND | GND |
+| WiiChuck Pin | T-Display S3 AMOLED | T-RGB   |
+| ------------ | ------------------- | ------- |
+| Data (SDA)   | GPIO 7              | GPIO 48 |
+| Clock (SCL)  | GPIO 6              | GPIO 8  |
+| 3.3V         | 3.3V                | 3.3V    |
+| GND          | GND                 | GND     |
 
+I2C address: `0x52`, bus speed: 400 kHz.
 
-### Connector
+### Controls
 
-Use a WiiChuck extension cable or adapter. The controller side uses a 6-pin connector:
+| Input               | Behavior                                           |
+| ------------------- | -------------------------------------------------- |
+| Joystick (active)   | Direct eye position; overrides autonomous movement  |
+| Joystick (centered) | Returns to autonomous wandering after 4 s delay    |
+| Z press             | Single blink (edge-triggered)                      |
+| Z hold              | Eyes stay closed                                   |
+| C press             | Boop expression (edge-triggered)                   |
+| C hold              | Eyes go wide                                       |
 
-```
-+---+---+
-| 1 | 2 |  <- Key side
-+---+---+
-| 3 | 4 |
-+---+---+
-| 5 | 6 |
-+---+---+
-```
+**Priority (highest → lowest):** close > wide > blink > boop
 
-Pin assignments (viewed from controller connector):
-- 1: Data (SDA)
-- 2: Clock (SCL)
-- 3: +3.3V
-- 4: GND
-- 5, 6: Key/not used
+Joystick values are raw 0–255 with center at 128. A ±10 dead zone prevents drift. Control returns to autonomous mode when the joystick is centered.
 
+The WiiChuck is optional — the firmware prints a warning at startup if not found and continues with autonomous animation.
 
-### I2C Configuration
+---
 
-- **I2C Address**: `0x52` (default WiiChuck address)
-- **Bus Speed**: 400kHz (Fast Mode)
-- **Pins**: SDA=21, SCL=22
+## Light Sensor (Pupil Control)
 
+Connect an LDR voltage divider to GPIO 5 (`LIGHT_PIN`). The sensor is auto-detected at startup by sampling for minimum variance; if not found, autonomous iris animation is used instead.
 
-### Initialization Sequence
+When connected:
 
-The code initializes the controller with:
-1. `0xF0/0x55` - Enable encryption
-2. `0xFB/0x00` - Initialize controller mode
+- Bright light → constricted pupil
+- Dim light → dilated pupil
+- Polled at 10 Hz with configurable min/max calibration and power curve
 
+---
 
-### Joystick
+## User Extension Hooks
 
-The analog joystick controls eye movement direction:
+Implement `user_setup()` and `user_loop()` in `src/user/user_hooks.cpp` to add custom behavior without modifying core code. `user_loop()` runs during the render task — keep it short.
 
-| Joystick Position | Eye Movement |
-|-------------------|--------------|
-| Center (idle) | Eyes return to autonomous wandering |
-| Up | Eyes look up |
-| Down | Eyes look down |
-| Left | Eyes look left |
-| Right | Eyes look right |
-| Diagonal | Combined direction |
-
-- Values are normalized to -1.0 to +1.0 range
-- Dead zone of ±10 prevents drift when centered
-- Movement is smoothed through EyeMovement interpolation
-
-
-### Buttons
-
-The Z and C buttons provide puppeteering commands:
-
-| Button | Action Type | Behavior |
-|--------|-------------|----------|
-| Z | Edge-triggered | Causes eyes to blink once on press |
-| Z (held) | Continuous | Eyes close while held |
-| C | Edge-triggered | Causes eyes to "boop" on press |
-| C (held) | Continuous | Eyes go wide (enlarged) while held |
-
-**Priority**: close > wide > blink > boop (when multiple conditions true)
-
-
-### Edge vs Hold Detection
-
-- **Edge-triggered**: Action fires once when button is pressed, not repeated while held
-- **Hold commands**: Action continues while button is held, stops on release
-
-
-### Code Architecture
-
-**Joystick Decoding** (`src/input/WiiChuck.cpp:51-53`):
-- Raw values are 0-255, center is 0x80 (128)
-- `joyX = m_status[0] - 0x80` gives -128 to +127
-- Normalized to -1.0 to +1.0 (dead zone applied)
-
-**Button Active-Low Detection** (`src/input/WiiChuck.cpp:55-59`):
-- WiiChuck buttons are active-LOW (pressed = 0)
-- `m_zPressed = !(m_status[5] & 0x01);`  // Z on bit 0
-- `m_cPressed = !((m_status[5] >> 1) & 0x01);`  // C on bit 1
-
-**Edge Detection** (`src/input/WiiChuck.cpp:71-81`):
-- Trigger on button press, not hold
-- `if (m_zPressed && !m_lastZPressed) { m_wantsBlink = true; }`
-- `m_lastZPressed = m_zPressed;`  // Remember for next frame
-
-
-### Initialization in Code
-
-The WiiChuck is auto-initialized in `setupInput()` (`src/main.cpp:117-126`):
+Available expression calls from either hook:
 
 ```cpp
-void setupInput() {
-    static WiiChuckInput chuck;
-    if (chuck.begin()) {
-        s_wiiChuck = &chuck;
-        Serial.println("WiiChuck initialized");
-    } else {
-        Serial.println("WiiChuck not found (this is normal if not connected)");
-    }
-}
+eyesBlink();    // trigger a single blink
+eyesBoop();     // trigger a boop expression
+eyesClose();    // hold eyelids closed
+eyesWide();     // hold eyelids wide
+eyesNormal();   // return to normal tracking
 ```
 
-If no controller is connected, the system continues with autonomous eye movement.
+---
 
+## Project Structure
 
-### Multi-Eye Controller Selection
-
-When multiple eyes are running (connected via ESP-NOW), the eye with an **active WiiChuck** becomes the controller:
-
-1. **Any eye can have a WiiChuck connected** — all eyes run the same firmware with `setupInput()`
-2. **The first eye to send ESP-NOW data becomes the controller** — detected in `src/main.cpp:138-143`:
-   ```cpp
-   sync.onDataReceived([](const EyeSyncMessage& msg, const uint8_t* mac) {
-       sync.setControllerMac(mac);
-   });
-   ```
-3. **Controller broadcasts its state** — position, pupil size, and commands (blink/boop/close/wide)
-4. **Follower eyes ignore their own input** and follow the controller's state via `processNetworkInput()` (`src/eye/EyeAnimator.cpp:234-259`)
-
-**Controller determination:**
-- `isController()` (`src/eye/EyeAnimator.cpp:48`) returns true when `m_input && m_input->hasExclusiveControl()`
-- `hasExclusiveControl()` returns true only when the joystick has active input (beyond dead zone)
-
-| Scenario | Result |
-|----------|--------|
-| Eye A has WiiChuck, Eye B doesn't | Eye A is controller, Eye B follows |
-| Eye B has WiiChuck, Eye A doesn't | Eye B is controller, Eye A follows |
-| Neither has WiiChuck | Both run autonomous wandering |
-| Both have WiiChuck | First to send data becomes controller |
-
-
-## File Structure
-
-```
-resources/eyes/
-  tablegen.py         # Eye data generator
-  default_eye/
-    default_eye.eye  # Sample eye configuration
-  another_eye/
-    another_eye.eye  # Custom eye configuration
+```text
+src/
+  main.cpp                  # Entry point, FreeRTOS task setup
+  eye/
+    EyeAnimator             # Central animation state machine
+    EyeRenderer             # Per-pixel polar-map rendering, double-buffered PSRAM
+    EyelidRenderer          # Eyelid shape rendering (procedural or custom)
+    EyeConfig.h             # Runtime configuration struct
+  animation/
+    EyeMovement             # Saccadic movement with lognormal distribution
+    BlinkFSM                # Three-phase blink state machine
+  display/
+    AMOLEDDisplay           # CO5300 QSPI driver (466×466)
+    TRGBDisplay             # ST7701S DPI driver (480×480)
+  input/
+    WiiChuck                # Wii Nunchuk I2C driver
+    LightSensor             # LDR photoresistor pupil control
+  network/
+    EyeSync                 # ESP-NOW controller/follower synchronization
+  common/
+    DisplayHAL.h            # Abstract display interface
+    EyeState.h              # Shared state structs and enums
+    DisplayGeometry.h       # Polar maps, circular clipping
+  debug/
+    DebugOverlay            # FPS + battery HUD (build flag: DEBUG_OVERLAY_ENABLED)
+  user/
+    user_hooks.cpp          # User extension template
 
 include/
-  *_466.h          # Generated AMOLED eye headers
-  *_480.h          # Generated T-RGB eye headers
+  eyes.h                    # EyeDefinition struct and helper macros
+  EyeLibrary.h              # Eye registry (s_eyeRegistry[], s_eyeCount)
+  BoardPins.h               # GPIO pin definitions per board
+  eyes/
+    *_466.h                 # Generated AMOLED eye headers
+    *_480.h                 # Generated T-RGB eye headers
+
+resources/eyes/
+  tablegen.py               # Eye header generator
+  <eye_name>/
+    <eye_name>_466.eye      # AMOLED eye config
+    <eye_name>_480.eye      # T-RGB eye config
+    *.png / *.bmp           # Optional textures and eyelid images
 ```
+
+---
+
+## Build Flags
+
+Defined in `platformio.ini` under `[esp32base]`:
+
+| Flag                    | Purpose                             |
+| ----------------------- | ----------------------------------- |
+| `FDEBUG`                | Enable debug serial output          |
+| `DEBUG_OVERLAY_ENABLED` | Show FPS/battery HUD on display     |
+| `CORE_DEBUG_LEVEL=3`    | ESP-IDF log verbosity (info)        |
+| `BUILDVER=0.0.1`        | Embedded firmware version string    |
