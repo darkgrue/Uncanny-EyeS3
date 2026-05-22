@@ -206,30 +206,57 @@ void EyeAnimator::updateLightSensor(uint32_t now) {
 }
 
 void EyeAnimator::updateIrisAutonomous(uint32_t now) {
-    // Fractal subdivision iris animation
-    // Uses multiple levels of subdivision for smooth random movement
-    float sum = 0.5f;
+    // Time-based smooth pupil animation mimicking human pupillary unrest
+    // - Saccade-like changes every 2-5 seconds
+    // - Smooth 600-1000ms transitions between states
+    // - Uses real display FPS timing, not wall clock
+    uint32_t dt = now - m_lastIrisChange;
     
-    for (int i = 0; i < IRIS_LEVELS; i++) {
-        uint16_t iexp = 1 << (i + 1);      // 2, 4, 8, 16, ...
-        uint16_t imask = iexp - 1;         // 1, 3, 7, 15, ...
-        uint16_t ibits = m_irisFrame & imask;
+    // Check if it's time for a new target (saccade-like pupil change)
+    if (dt >= m_irisHoldDuration) {
+        // Generate new target with physiological bias
+        // Pupil naturally varies around a baseline with small random fluctuations
+        float u1 = (float)random(0, 1000) / 1000.0f;
+        float u2 = (float)random(0, 1000) / 1000.0f;
         
-        if (ibits) {
-            float weight = (float)ibits / (float)iexp;
-            float n = m_irisPrev[i] * (1.0f - weight) + m_irisNext[i] * weight;
-            sum += n / (float)(1 << (IRIS_LEVELS - i));
-        } else {
-            m_irisPrev[i] = m_irisNext[i];
-            m_irisNext[i] = -0.5f + random(0, 1000) / 1000.0f;
-        }
+        // Lognormal distribution - most movements are small
+        float normalSample = sqrt(-2.0f * log(u1 + 0.0001f)) * cos(2.0f * PI * u2);
+        float lognormalSample = normalSample * 0.3f - 0.1f;
+        
+        // Clamp to reasonable range (-0.3 to +0.3 offset from baseline)
+        m_irisTarget = constrain(lognormalSample, -0.3f, 0.3f);
+        
+        // Vary hold duration for more natural timing (2-5 seconds)
+        m_irisHoldDuration = 2000000 + random(0, 3000000);
+        
+        // Vary transition duration (600-1000ms for realistic saccade-like motion)
+        m_irisTransitionDuration = 600000 + random(0, 400000);
+        
+        m_lastIrisChange = now;
     }
+    
+    // Smooth interpolation toward target using sigmoid easing
+    float t = (float)dt / (float)m_irisTransitionDuration;
+    t = constrain(t, 0.0f, 1.0f);
+    
+    // Smooth step easing (sigmoid-like)
+    float eased = t * t * (3.0f - 2.0f * t);
+    
+    // Apply easing to interpolate from previous target to current target
+    // This creates the smooth saccade-like transition
+    m_irisSmooth = m_irisPrev[0] + (m_irisTarget - m_irisPrev[0]) * eased;
+    
+    // Update prev storage for next transition
+    if (dt >= m_irisHoldDuration) {
+        m_irisPrev[0] = m_irisTarget;
+    }
+    
+    // Calculate final iris value
+    // Normal sum centered at 0.5, with smooth random offset
+    float sum = 0.5f + m_irisSmooth;
+    sum = constrain(sum, 0.3f, 0.7f);  // Clamp to valid pupil range
     
     m_currentIris = m_irisMin + (sum * m_irisRange);
-    
-    if (++m_irisFrame >= (1 << IRIS_LEVELS)) {
-        m_irisFrame = 0;
-    }
 }
 
 void EyeAnimator::processNetworkInput() {

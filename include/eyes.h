@@ -16,7 +16,7 @@
 #endif
 
 // Note: Lookup tables (polarAngle_*, polarDist_*, disp_*) are defined
-// in display_466.h or display_480.h depending on display type
+// in display/display_466.h or display/display_480.h depending on display type
 
 // Pupil/iris configuration
 struct PupilConfig {

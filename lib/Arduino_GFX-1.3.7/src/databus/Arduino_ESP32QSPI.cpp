@@ -67,7 +67,7 @@ bool Arduino_ESP32QSPI::begin(int32_t speed, int8_t dataMode)
       .clock_speed_hz = _speed,
       .spics_io_num = -1, // avoid use system CS control
       .flags = SPI_DEVICE_HALFDUPLEX,
-      .queue_size = 4,  // 4 transfer slots for efficient QSPI operation
+      .queue_size = 4, // 4 transfer slots for efficient QSPI operation
   };
   ret = spi_bus_add_device(QSPI_SPI_HOST, &devcfg, &_handle);
   if (ret != ESP_OK)
@@ -519,10 +519,10 @@ INLINE void Arduino_ESP32QSPI::CS_LOW(void)
 INLINE void Arduino_ESP32QSPI::POLL_START()
 {
   esp_err_t ret = spi_device_polling_start(_handle, _spi_tran, portMAX_DELAY);
-  // if (ret != ESP_OK)
-  // {
-  //   log_e("spi_device_polling_start error: %d", ret);
-  // }
+  if (ret != ESP_OK)
+  {
+    log_e("POLL_START(): spi_device_polling_start error: %d.", ret);
+  }
 }
 
 /**
@@ -533,10 +533,10 @@ INLINE void Arduino_ESP32QSPI::POLL_START()
 INLINE void Arduino_ESP32QSPI::POLL_END()
 {
   esp_err_t ret = spi_device_polling_end(_handle, portMAX_DELAY);
-  // if (ret != ESP_OK)
-  // {
-  //   log_e("spi_device_polling_end error: %d", ret);
-  // }
+  if (ret != ESP_OK)
+  {
+    log_e("POLL_END(): spi_device_polling_end error: %d.", ret);
+  }
 }
 
 /**
@@ -544,13 +544,15 @@ INLINE void Arduino_ESP32QSPI::POLL_END()
  */
 bool Arduino_ESP32QSPI::queueTrans(uint32_t len)
 {
-  if (_transPending) {
-    return false;  // Already have one pending
+  if (_transPending)
+  {
+    return false; // Already have one pending
   }
 
   // Queue the transaction (non-blocking)
-  esp_err_t ret = spi_device_queue_trans(_handle, _spi_tran, 0);  // 0 = no wait if queue full
-  if (ret == ESP_OK) {
+  esp_err_t ret = spi_device_queue_trans(_handle, _spi_tran, 0); // 0 = no wait if queue full
+  if (ret == ESP_OK)
+  {
     _transPending = true;
     _lastTransLen = len;
     return true;
@@ -563,13 +565,15 @@ bool Arduino_ESP32QSPI::queueTrans(uint32_t len)
  */
 bool Arduino_ESP32QSPI::waitTransComplete(uint32_t timeout_ms)
 {
-  if (!_transPending) {
-    return true;  // Nothing pending
+  if (!_transPending)
+  {
+    return true; // Nothing pending
   }
 
   spi_transaction_t *rtrans = nullptr;
   esp_err_t ret = spi_device_get_trans_result(_handle, &rtrans, pdMS_TO_TICKS(timeout_ms));
-  if (ret == ESP_OK) {
+  if (ret == ESP_OK)
+  {
     _transPending = false;
     return true;
   }
@@ -581,13 +585,15 @@ bool Arduino_ESP32QSPI::waitTransComplete(uint32_t timeout_ms)
  */
 bool Arduino_ESP32QSPI::isTransComplete()
 {
-  if (!_transPending) {
+  if (!_transPending)
+  {
     return true;
   }
 
   spi_transaction_t *rtrans = nullptr;
-  esp_err_t ret = spi_device_get_trans_result(_handle, &rtrans, 0);  // 0 = non-blocking
-  if (ret == ESP_OK) {
+  esp_err_t ret = spi_device_get_trans_result(_handle, &rtrans, 0); // 0 = non-blocking
+  if (ret == ESP_OK)
+  {
     _transPending = false;
     return true;
   }
@@ -608,7 +614,8 @@ void Arduino_ESP32QSPI::beginAsyncWrite()
   _spi_tran_ext.base.length = 0;
 
   esp_err_t ret = spi_device_queue_trans(_handle, _spi_tran, portMAX_DELAY);
-  if (ret != ESP_OK) {
+  if (ret != ESP_OK)
+  {
     log_e("beginAsyncWrite: queue_trans error: %d", ret);
   }
 }
@@ -655,10 +662,11 @@ void Arduino_ESP32QSPI::asyncWriteAllPixels(uint16_t *data, uint32_t totalLen)
     }
 
     _spi_tran_ext.base.tx_buffer = _buffer32;
-    _spi_tran_ext.base.length = chunk << 4;  // 16 bits per pixel
+    _spi_tran_ext.base.length = chunk << 4; // 16 bits per pixel
 
     esp_err_t ret = spi_device_queue_trans(_handle, _spi_tran, portMAX_DELAY);
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
       log_e("asyncWriteAllPixels: queue_trans error: %d", ret);
       break;
     }
@@ -669,7 +677,8 @@ void Arduino_ESP32QSPI::asyncWriteAllPixels(uint16_t *data, uint32_t totalLen)
 
     // For non-first chunks, we need to handle the fact that _spi_tran is reused
     // Each queue_trans reuses _spi_tran, so we need to be careful about timing
-    if (!first_send) {
+    if (!first_send)
+    {
       // Wait for previous transaction before queueing next
       spi_transaction_t *rtrans = nullptr;
       spi_device_get_trans_result(_handle, &rtrans, portMAX_DELAY);
@@ -687,9 +696,10 @@ void Arduino_ESP32QSPI::endAsyncWrite()
 
   // Wait for the last transaction to complete
   spi_transaction_t *rtrans = nullptr;
-  esp_err_t ret = spi_device_get_trans_result(_handle, &rtrans, 10000);  // 10s timeout
+  esp_err_t ret = spi_device_get_trans_result(_handle, &rtrans, 10000); // 10s timeout
 
-  if (ret != ESP_OK) {
+  if (ret != ESP_OK)
+  {
     log_e("endAsyncWrite: get_trans_result error: %d", ret);
   }
 
@@ -701,8 +711,9 @@ void Arduino_ESP32QSPI::endAsyncWrite()
  */
 bool Arduino_ESP32QSPI::queueSingleTrans(uint16_t *data, uint32_t len)
 {
-  if (_transPending) {
-    return false;  // Already have one pending
+  if (_transPending)
+  {
+    return false; // Already have one pending
   }
 
   // Pack into our buffer
@@ -722,8 +733,9 @@ bool Arduino_ESP32QSPI::queueSingleTrans(uint16_t *data, uint32_t len)
   _spi_tran_ext.base.tx_buffer = _buffer32;
   _spi_tran_ext.base.length = len << 4;
 
-  esp_err_t ret = spi_device_queue_trans(_handle, _spi_tran, 0);  // 0 = non-blocking
-  if (ret == ESP_OK) {
+  esp_err_t ret = spi_device_queue_trans(_handle, _spi_tran, 0); // 0 = non-blocking
+  if (ret == ESP_OK)
+  {
     _transPending = true;
     _lastTransLen = len;
     return true;
@@ -736,13 +748,15 @@ bool Arduino_ESP32QSPI::queueSingleTrans(uint16_t *data, uint32_t len)
  */
 bool Arduino_ESP32QSPI::waitSingleTrans(uint32_t timeout_ms)
 {
-  if (!_transPending) {
+  if (!_transPending)
+  {
     return true;
   }
 
   spi_transaction_t *rtrans = nullptr;
   esp_err_t ret = spi_device_get_trans_result(_handle, &rtrans, pdMS_TO_TICKS(timeout_ms));
-  if (ret == ESP_OK) {
+  if (ret == ESP_OK)
+  {
     _transPending = false;
     return true;
   }
@@ -761,19 +775,23 @@ bool Arduino_ESP32QSPI::queueChunk(uint8_t *data, uint32_t len, bool isFirst, bo
 {
   // Find a free transaction slot
   uint8_t slot = 0;
-  for (uint8_t i = 0; i < ASYNC_QUEUE_SIZE; i++) {
-    if (!_asyncTransUsed[i]) {
+  for (uint8_t i = 0; i < ASYNC_QUEUE_SIZE; i++)
+  {
+    if (!_asyncTransUsed[i])
+    {
       slot = i;
       break;
     }
   }
-  if (_asyncTransUsed[slot]) {
-    return false;  // No free slots
+  if (_asyncTransUsed[slot])
+  {
+    return false; // No free slots
   }
 
   // Configure transaction flags
   uint32_t flags = SPI_TRANS_MODE_QIO;
-  if (!isFirst) {
+  if (!isFirst)
+  {
     flags |= SPI_TRANS_VARIABLE_CMD | SPI_TRANS_VARIABLE_ADDR | SPI_TRANS_VARIABLE_DUMMY;
   }
 
@@ -781,11 +799,12 @@ bool Arduino_ESP32QSPI::queueChunk(uint8_t *data, uint32_t len, bool isFirst, bo
   _asyncTrans[slot].base.cmd = 0x32;
   _asyncTrans[slot].base.addr = 0x003C00;
   _asyncTrans[slot].base.tx_buffer = data;
-  _asyncTrans[slot].base.length = len << 3;  // bytes to bits
+  _asyncTrans[slot].base.length = len << 3; // bytes to bits
 
   // Queue the transaction
-  esp_err_t ret = spi_device_queue_trans(_handle, &_asyncTrans[slot].base, 0);  // non-blocking
-  if (ret == ESP_OK) {
+  esp_err_t ret = spi_device_queue_trans(_handle, &_asyncTrans[slot].base, 0); // non-blocking
+  if (ret == ESP_OK)
+  {
     _asyncTransUsed[slot] = 1;
     _activeTransCount++;
     return true;
@@ -801,24 +820,30 @@ bool Arduino_ESP32QSPI::waitAllChunks(uint32_t timeout_ms)
   uint32_t startMs = millis();
   uint32_t remaining = timeout_ms;
 
-  while (_activeTransCount > 0) {
-    if (millis() - startMs >= timeout_ms) {
-      return false;  // Timeout
+  while (_activeTransCount > 0)
+  {
+    if (millis() - startMs >= timeout_ms)
+    {
+      return false; // Timeout
     }
 
     // Check each slot
-    for (uint8_t i = 0; i < ASYNC_QUEUE_SIZE; i++) {
-      if (_asyncTransUsed[i]) {
+    for (uint8_t i = 0; i < ASYNC_QUEUE_SIZE; i++)
+    {
+      if (_asyncTransUsed[i])
+      {
         spi_transaction_t *rtrans = nullptr;
         esp_err_t ret = spi_device_get_trans_result(_handle, &rtrans, pdMS_TO_TICKS(remaining));
-        if (ret == ESP_OK) {
+        if (ret == ESP_OK)
+        {
           _asyncTransUsed[i] = 0;
           _activeTransCount--;
         }
       }
     }
 
-    if (_activeTransCount > 0) {
+    if (_activeTransCount > 0)
+    {
       vTaskDelay(1);
     }
   }

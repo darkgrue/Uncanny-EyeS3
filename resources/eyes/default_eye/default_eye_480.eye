@@ -22,7 +22,7 @@
         "angle": 0,
         "spin": 0,
         "mirror": false
-    },
+},
     "eyelid": {
         "color": 0
     }

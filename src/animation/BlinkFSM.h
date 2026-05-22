@@ -41,16 +41,10 @@ private:
     EyeBlinkState m_state = NOBLINK;
     float m_factor = 0.0f;
     bool m_forced = false;
-    
+
     uint32_t m_stateStart = 0;
     uint32_t m_blinkDuration = 0;
     uint32_t m_nextBlinkTime = 0;
-    
-    // Timing constants (microseconds)
-    static constexpr uint32_t MIN_BLINK_DURATION = 36000;   // ~1/28 sec
-    static constexpr uint32_t MAX_BLINK_DURATION = 72000;    // ~1/14 sec
-    static constexpr uint32_t MIN_TIME_TO_BLINK = 2000000;  // 2 sec minimum
-    static constexpr uint32_t MAX_TIME_TO_BLINK = 8000000;  // 8 sec maximum
 };
 
 #endif // BLINK_FSM_H

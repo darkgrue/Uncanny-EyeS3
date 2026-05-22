@@ -8,6 +8,7 @@
 #include "display/TRGBDisplay.h"
 #include "eye/EyeAnimator.h"
 #include "input/WiiChuck.h"
+#include "input/LightSensor.h"
 #include "network/EyeSync.h"
 #include "debug/DebugOverlay.h"
 #include "eyes.h"
@@ -23,6 +24,7 @@ static DisplayHAL *s_display = nullptr;
 static WiiChuckInput *s_wiiChuck = nullptr;
 static EyeSyncManager *s_syncManager = nullptr;
 static EyeInterpolator *s_interpolator = nullptr;
+static LightSensor *s_lightSensor = nullptr;
 
 #ifdef DEBUG_OVERLAY_ENABLED
 static DebugOverlay s_debugOverlay;
@@ -144,6 +146,30 @@ void setupInput()
   {
     Serial.println("WiiChuck not found (this is normal if not connected).");
   }
+
+  static LightSensor lightSensor(LIGHT_PIN);
+  if (lightSensor.begin())
+  {
+    s_lightSensor = &lightSensor;
+  }
+}
+
+void setupLightSensor()
+{
+  if (s_lightSensor && s_lightSensor->isConnected())
+  {
+    s_animator->setLightSensor(
+        s_lightSensor->getPin(),
+        s_lightSensor->getMinValue(),
+        s_lightSensor->getMaxValue(),
+        s_lightSensor->getCurve());
+    Serial.println("Light sensor configured.");
+  }
+  else
+  {
+    s_animator->setLightSensor(-1, 0, 1023, 1.0f);
+    Serial.println("Light sensor not connected - using autonomous iris animation.");
+  }
 }
 
 void setupNetwork()
@@ -214,6 +240,8 @@ void setup()
     return;
   }
 
+  setupLightSensor();
+
   if (s_wiiChuck)
   {
     s_animator->setInput(s_wiiChuck);
@@ -223,7 +251,6 @@ void setup()
     s_animator->setSyncManager(s_syncManager);
   }
 
-  s_animator->setLightSensor(-1, 0, 1023, 1.0f);
   s_animator->setPupilRange(0.45f, 0.8f);
 
   Serial.println("\nInitialization complete!\n");
@@ -265,23 +292,30 @@ void renderLoopTask(void *param)
 #endif
 
       s_animator->update(millis());
-      s_animator->broadcastState();
 
-      // Check if we can render (previous transfer complete)
-      EyeRenderer* renderer = s_animator->getRenderer();
+      if (s_lightSensor)
+      {
+        s_lightSensor->update();
+      }
+
+      s_animator->broadcastState();
 
       if (s_animator->needsRender())
       {
         float eyeX = s_animator->getEyeX();
         float eyeY = s_animator->getEyeY();
         float pupilFactor = s_animator->getPupilFactor();
+        float blinkFactor = s_animator->getBlinkFactor();
 
-        // Render frame
+        EyeRenderer* renderer = s_animator->getRenderer();
+        float upperLidFactor = renderer->getUpperLidFactor();
+        float lowerLidFactor = renderer->getLowerLidFactor();
+
         renderer->renderFrame(
             eyeX, eyeY,
             pupilFactor,
-            1.0f, 1.0f,
-            0.0f,
+            upperLidFactor, lowerLidFactor,
+            blinkFactor,
             0, 0);
       }
     }

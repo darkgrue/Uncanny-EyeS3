@@ -24,6 +24,8 @@
         "mirror": false
     },
     "eyelid": {
-        "color": 0
+        "color": 0,
+        "upperFilename": "upper_466.png",
+        "lowerFilename": "lower_466.png"
     }
 }

@@ -44,6 +44,9 @@ public:
     
     // Get pupil factor
     float getPupilFactor() const { return m_currentIris; }
+
+    // Get blink factor (0.0 = open, 1.0 = closed)
+    float getBlinkFactor() const { return m_blink.getFactor(); }
     
     // Check if rendering is needed
     bool needsRender() const { return m_needsRender; }
@@ -93,6 +96,13 @@ private:
     float m_irisPrev[IRIS_LEVELS] = { 0 };
     float m_irisNext[IRIS_LEVELS] = { 0 };
     uint16_t m_irisFrame = 0;
+    
+    // Time-based smooth iris animation
+    float m_irisTarget = 0.0f;        // Target iris offset (-0.5 to +0.5)
+    float m_irisSmooth = 0.0f;         // Current smoothed iris value
+    uint32_t m_lastIrisChange = 0;    // Timestamp of last target change (micros)
+    uint32_t m_irisHoldDuration = 3000000;  // 3 seconds between saccade-like changes
+    uint32_t m_irisTransitionDuration = 800000;  // 800ms smooth transition
     
     // Boop detection
     bool m_booped = false;

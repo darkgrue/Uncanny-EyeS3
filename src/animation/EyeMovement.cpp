@@ -55,7 +55,7 @@ void EyeMovement::startRandomMove() {
     m_startX = m_currentX;
     m_startY = m_currentY;
 
-    // Generate random movement amplitude using exponential distribution
+    // Generate random movement amplitude using lognormal distribution
     // This makes small movements MUCH more common than large ones
     // Real saccades follow a lognormal distribution - most are small microsaccades
     float u1 = (float)random(0, 1000) / 1000.0f;
@@ -63,12 +63,11 @@ void EyeMovement::startRandomMove() {
 
     // Box-Muller transform for normal distribution, then exp for lognormal
     float normalSample = sqrt(-2.0f * log(u1 + 0.0001f)) * cos(2.0f * PI * u2);
-    // Using sigma=0.35 means most movements are small
-    float lognormalSample = exp(normalSample * 0.35f - 0.2f);
+    float lognormalSample = exp(normalSample * EYE_MOVE_LOGNORMAL_SIGMA + EYE_MOVE_LOGNORMAL_OFFSET);
 
-    // Clamp amplitude to bounds
-    float amplitude = lognormalSample * m_boundsRadius * 0.5f;
-    amplitude = constrain(amplitude, 0.01f, m_boundsRadius * 0.8f);
+    // Clamp amplitude to bounds using defines
+    float amplitude = lognormalSample * m_boundsRadius * EYE_MOVE_AMPLITUDE_SCALE;
+    amplitude = constrain(amplitude, EYE_MOVE_MIN_AMPLITUDE, m_boundsRadius * EYE_MOVE_MAX_AMPLITUDE_SCALE);
 
     // Random direction (uniform on circle)
     float angle = (float)random(0, 6283) / 1000.0f;  // 0 to 2*PI
@@ -85,8 +84,8 @@ void EyeMovement::startRandomMove() {
     // Apply centering bias - the further from center, the stronger the pull back
     // This mimics natural human eye behavior where peripheral movements
     // often end with a corrective glance back toward center
-    float centerBias = currentDist * 0.6f;  // 0-60% bias based on distance from center
-    centerBias = constrain(centerBias, 0.0f, 0.5f);  // Cap at 50%
+    float centerBias = currentDist * EYE_MOVE_CENTER_BIAS_FACTOR;
+    centerBias = constrain(centerBias, 0.0f, EYE_MOVE_CENTER_BIAS_MAX);
 
     // Blend target toward center based on how far we currently are
     float biasedTargetX = targetX * (1.0f - centerBias);
@@ -109,10 +108,10 @@ void EyeMovement::startRandomMove() {
     float distanceRatio = distance / (m_boundsRadius * 0.5f);
 
     // Base duration for small movements, longer for larger ones
-    uint32_t baseDuration = random(200, 350);
-    uint32_t extraDuration = (uint32_t)(distanceRatio * 150.0f);
+    uint32_t baseDuration = random(EYE_MOVE_BASE_DURATION_MIN, EYE_MOVE_BASE_DURATION_MAX);
+    uint32_t extraDuration = (uint32_t)(distanceRatio * EYE_MOVE_DURATION_DISTANCE_SCALE);
     m_moveDuration = baseDuration + extraDuration;
-    m_moveDuration = constrain(m_moveDuration, 150u, 500u);
+    m_moveDuration = constrain(m_moveDuration, EYE_MOVE_DURATION_MIN, EYE_MOVE_DURATION_MAX);
 
     m_moveStartTime = millis();
     m_moving = true;
@@ -129,10 +128,11 @@ void EyeMovement::moveTo(float x, float y, uint32_t durationMs) {
 // Sigmoid-shaped easing for smooth acceleration and deceleration
 // Approximates natural saccade velocity profile
 static float saccadeEasing(float t) {
+    float steepness = EYE_MOVE_EASING_STEEPNESS;
     if (t < 0.5f) {
-        return 0.5f * (1.0f - tanh(3.0f * (1.0f - 2.0f * t)));
+        return 0.5f * (1.0f - tanh(steepness * (1.0f - 2.0f * t)));
     } else {
-        return 0.5f * (1.0f + tanh(3.0f * (2.0f * t - 1.0f)));
+        return 0.5f * (1.0f + tanh(steepness * (2.0f * t - 1.0f)));
     }
 }
 
@@ -154,34 +154,34 @@ bool EyeMovement::update(uint32_t dt) {
         }
         return false;
     }
-    
+
     uint32_t now = millis();
     uint32_t elapsed = now - m_moveStartTime;
-    
+
     if (elapsed >= m_moveDuration) {
         // Movement complete
         m_currentX = m_targetX;
         m_currentY = m_targetY;
         m_moving = false;
-        
+
         if (m_randomMode) {
             // Enter idle state and record completion time
-            // Next saccade will be delayed by m_saccadeDelayAfterTrack
+            // Next saccade will be delayed by fixation pause
             m_idle = true;
             m_lastTrackTime = now;
             // Duration for next pause (time spent idle before next movement)
-            m_moveDuration = random(4000, 8000);  // 4-8s fixation pause
+            m_moveDuration = random(EYE_MOVE_FIXATION_PAUSE_MIN, EYE_MOVE_FIXATION_PAUSE_MAX);
             m_moveStartTime = now;
         }
         return true;
     }
-    
+
     // Frame-rate independent sigmoid easing
     float t = (float)elapsed / (float)m_moveDuration;
     float e = saccadeEasing(t);
-    
+
     m_currentX = m_startX + (m_targetX - m_startX) * e;
     m_currentY = m_startY + (m_targetY - m_startY) * e;
-    
+
     return true;
 }

@@ -45,3 +45,6 @@
 
 // PCF8563
 #define PCF8563_INT 9
+
+// Light Sensor
+#define LIGHT_PIN 5

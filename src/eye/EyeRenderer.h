@@ -5,6 +5,7 @@
 #include "common/DisplayGeometry.h"
 #include "common/DisplayHAL.h"
 #include "eyes.h"
+#include "EyelidRenderer.h"
 #include <cstring>
 
 // Core eye rendering engine
@@ -41,6 +42,9 @@ public:
   // Get circular clip for debug rendering
   const CircularClip &getClip() const { return m_clip; }
 
+  float getUpperLidFactor() const { return m_eyelidRenderer.getUpperLidFactor(); }
+  float getLowerLidFactor() const { return m_eyelidRenderer.getLowerLidFactor(); }
+
 private:
   DisplayHAL *m_display = nullptr;
   int m_displaySize = 0;
@@ -76,6 +80,9 @@ private:
   // Sized for maximum single transfer: full display width * height
   static constexpr int SCRATCH_BUF_SIZE = 466 * 466;
   uint16_t* m_scratchBuf = nullptr;
+
+  // Eyelid renderer (manages eyelid animation)
+  EyelidRenderer m_eyelidRenderer;
 };
 
 #endif // EYE_RENDERER_H
