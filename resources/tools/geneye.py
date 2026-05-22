@@ -167,7 +167,8 @@ def generate_header(config: dict, eye_file: Path, output_path: Path, screen_size
     eye_radius = size_info['eye_radius']
     map_radius = size_info['map_radius']
 
-    eye_name = config.get('name', eye_file.stem.replace(' ', '_').replace('-', '_'))
+    eye_name = config.get(
+        'name', eye_file.stem.replace(' ', '_').replace('-', '_'))
     namespace = eye_file.parent.name.replace(' ', '_').replace('-', '_')
 
     eyelid_config = config.get('eyelid', {})
@@ -179,9 +180,12 @@ def generate_header(config: dict, eye_file: Path, output_path: Path, screen_size
         lower_path = eye_file.parent / lower_filename
 
         if upper_path.exists() and lower_path.exists():
-            print(f"    Loading custom eyelids from {upper_filename}, {lower_filename}")
-            upper_table = convert_eyelid_image(upper_path, width, height, True)   # is_upper=True
-            lower_table = convert_eyelid_image(lower_path, width, height, False)  # is_upper=False
+            print(
+                f"    Loading custom eyelids from {upper_filename}, {lower_filename}")
+            upper_table = convert_eyelid_image(
+                upper_path, width, height, True)   # is_upper=True
+            lower_table = convert_eyelid_image(
+                lower_path, width, height, False)  # is_upper=False
         else:
             print(f"    Warning: Eyelid files not found, using circular defaults")
             upper_table = generate_no_eyelids(width, eye_radius)
@@ -200,7 +204,8 @@ def generate_header(config: dict, eye_file: Path, output_path: Path, screen_size
     lines.append(f'namespace {namespace} {{')
     lines.append('')
 
-    lines.append(f'  // Upper eyelid lookup table ({width} columns, 0-255 range)')
+    lines.append(
+        f'  // Upper eyelid lookup table ({width} columns, 0-255 range)')
     lines.append(f'  const uint8_t upper[{width * 2}] PROGMEM = {{')
     for i in range(0, width, 8):
         parts = []
@@ -214,7 +219,8 @@ def generate_header(config: dict, eye_file: Path, output_path: Path, screen_size
     lines.append('  };')
     lines.append('')
 
-    lines.append(f'  // Lower eyelid lookup table ({width} columns, 0-255 range)')
+    lines.append(
+        f'  // Lower eyelid lookup table ({width} columns, 0-255 range)')
     lines.append(f'  const uint8_t lower[{width * 2}] PROGMEM = {{')
     for i in range(0, width, 8):
         parts = []
@@ -238,7 +244,8 @@ def generate_header(config: dict, eye_file: Path, output_path: Path, screen_size
     squint = config.get('squint', 0)
 
     lines.append(f'  const EyeDefinition eye PROGMEM = {{')
-    lines.append(f'      "{eye_name}", {radius_frac}, {back_color}, {str(tracking).lower()}, {squint}, nullptr,')
+    lines.append(
+        f'      "{eye_name}", {radius_frac}, {back_color}, {str(tracking).lower()}, {squint}, nullptr,')
     lines.append(f'      {{ {pupil.get("color", 0)}, {pupil.get("slitRadius", 0)}, '
                  f'{pupil.get("minFraction", 0.35)}, {pupil.get("maxFraction", 1.67)} }},')
     lines.append(f'      {{ {iris.get("radiusFraction", 0.5)}, {{ nullptr, 0, 0 }}, '
@@ -284,11 +291,11 @@ Output is written to: include/eyes/<eye_name>.h
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-eye', metavar='NAME',
-                        help='Generate header for specific eye directory name')
+                       help='Generate header for specific eye directory name')
     group.add_argument('-all', action='store_true',
-                        help='Generate headers for all eyes')
+                       help='Generate headers for all eyes')
     group.add_argument('-list', action='store_true',
-                        help='List available eyes')
+                       help='List available eyes')
 
     args = parser.parse_args()
 
@@ -302,7 +309,8 @@ Output is written to: include/eyes/<eye_name>.h
             print("  No eye configurations found in resources/eyes/")
             return
         for ec in eye_configs:
-            print(f"  - {ec['name']} ({ec['screen_size']}x{ec['screen_size']})")
+            print(
+                f"  - {ec['name']} ({ec['screen_size']}x{ec['screen_size']})")
         return
 
     if args.all:

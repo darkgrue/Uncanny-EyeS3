@@ -1,3 +1,16 @@
+/**
+ * @file main.cpp
+ * @brief Main entry point for the Uncanny Eyes ESP32 firmware.
+ *
+ * Initializes display, power management (SY6970), input devices
+ * (WiiChuck, LightSensor), and network (ESP-NOW). Runs the eye
+ * animation at ~120 FPS on a dedicated FreeRTOS task pinned to
+ * Core 1, with a lightweight status loop on loop().
+ *
+ * Supported boards:
+ * - LilyGo T-Display S3 AMOLED (CO5300 via QSPI)
+ * - LilyGo T-RGB (ST7701S via DPI)
+ */
 #include <Arduino.h>
 #include <Arduino_DriveBus_Library.h>
 #include "common/EyeState.h"
@@ -51,6 +64,11 @@ std::unique_ptr<Arduino_IIC> PCF8563(new Arduino_PCF8563(IIC_Bus, PCF8563_DEVICE
 
 void renderLoopTask(void *param);
 
+/**
+ * @brief Switch the active eye definition by index.
+ *
+ * Registered as a command handler for the 'E' serial command.
+ */
 void switchEye(int index)
 {
   if (s_animator && s_animator->setEyeIndex(index))
@@ -59,6 +77,12 @@ void switchEye(int index)
   }
 }
 
+/**
+ * @brief Initialize and configure the SY6970 battery fuel gauge.
+ *
+ * Enables ADC measurement, configures charging thresholds, voltage
+ * limits, and current limits for safe Li-Po operation.
+ */
 void setupSY6970()
 {
   if (SY6970->begin() == false)
@@ -104,6 +128,12 @@ void setupSY6970()
   Serial.println("SY6970 configuration complete.");
 }
 
+/**
+ * @brief Initialize the display based on the detected board.
+ *
+ * Instantiates either AMOLEDDisplay or TRGBDisplay and stores the
+ * pointer in s_display. Configures dimensions in s_config.
+ */
 void setupDisplay()
 {
 #if IS_AMOLED
@@ -134,6 +164,13 @@ void setupDisplay()
   Serial.printf("Display: %dx%d\n", s_config.displayWidth, s_config.displayHeight);
 }
 
+/**
+ * @brief Initialize WiiChuck and LightSensor input devices.
+ *
+ * Attempts to initialize a Wii Nunchuck on the I2C bus and a
+ * photoresistor on LIGHT_PIN. Both are optional (sensor works
+ * without a controller, and vice versa).
+ */
 void setupInput()
 {
   static WiiChuckInput chuck;
@@ -154,6 +191,13 @@ void setupInput()
   }
 }
 
+/**
+ * @brief Configure the EyeAnimator with the detected light sensor.
+ *
+ * Reads the sensor's calibrated min/max and curve values and passes
+ * them to EyeAnimator. When no sensor is connected, passes -1 to
+ * enable autonomous iris animation instead.
+ */
 void setupLightSensor()
 {
   if (s_lightSensor && s_lightSensor->isConnected())
@@ -172,6 +216,13 @@ void setupLightSensor()
   }
 }
 
+/**
+ * @brief Initialize ESP-NOW networking.
+ *
+ * Sets WiFi to STA mode, initializes the EyeSyncManager, and registers
+ * callbacks for peer events and incoming state data. Sends the local
+ * MAC address to the serial console for pairing.
+ */
 void setupNetwork()
 {
   WiFi.mode(WIFI_STA);
@@ -188,9 +239,7 @@ void setupNetwork()
                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
             sync.setControllerMac(mac); });
 
-    Serial.println("ESP-NOW initialized.");
-    Serial.print("MAC: ");
-    Serial.println(WiFi.macAddress());
+    Serial.printf("ESP-NOW initialized (MAC: %s).\n", WiFi.macAddress().c_str());
   }
   else
   {
@@ -201,6 +250,13 @@ void setupNetwork()
   s_interpolator = &interp;
 }
 
+/**
+ * @brief Firmware initialization: peripherals, display, inputs, and animation.
+ *
+ * Initializes Serial, SY6970, display, debug overlay, inputs, network,
+ * and the EyeAnimator. Creates the renderLoopTask on Core 1 at priority 1.
+ * This function does not return until the render task takes over.
+ */
 void setup()
 {
   Serial.begin(115200);
@@ -258,6 +314,13 @@ void setup()
   xTaskCreatePinnedToCore(renderLoopTask, "EyeTask", 8192, NULL, 1, NULL, 1);
 }
 
+/**
+ * @brief Eye rendering task running on Core 1 at ~120 FPS.
+ *
+ * Updates the animation state machine, polls the light sensor, broadcasts
+ * to ESP-NOW peers, and triggers rendering when needed. Handles both
+ * continuous animation and dirty-region-based updates via EyeRenderer.
+ */
 void renderLoopTask(void *param)
 {
   (void)param;
@@ -324,6 +387,13 @@ void renderLoopTask(void *param)
   }
 }
 
+/**
+ * @brief Status report loop running on Core 0 (Arduino loop).
+ *
+ * Prints a running status line every 5 seconds and handles serial
+ * commands ('En' to switch eyes). Kept lightweight to avoid
+ * interfering with the render task.
+ */
 void loop()
 {
   static uint32_t lastStatus = 0;

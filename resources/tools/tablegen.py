@@ -232,10 +232,13 @@ def generate_all_displays(outputDir):
         screenHeight = cfg["height"]
         mapRadius = cfg["mapRadius"]
 
-        print(f"Generating {displayType}: {screenWidth}x{screenHeight}, mapRadius={mapRadius}")
+        print(
+            f"Generating {displayType}: {screenWidth}x{screenHeight}, mapRadius={mapRadius}")
 
-        displayTables = generate_display_tables(screenWidth, screenHeight, mapRadius)
-        generate_display_header_file(outputDir, screenWidth, screenHeight, mapRadius, displayTables)
+        displayTables = generate_display_tables(
+            screenWidth, screenHeight, mapRadius)
+        generate_display_header_file(
+            outputDir, screenWidth, screenHeight, mapRadius, displayTables)
 
 
 if __name__ == "__main__":
@@ -267,10 +270,13 @@ if __name__ == "__main__":
         screenHeight = cfg["height"]
         mapRadius = cfg["mapRadius"]
 
-        print(f"Generating {displayType}: {screenWidth}x{screenHeight}, mapRadius={mapRadius}")
+        print(
+            f"Generating {displayType}: {screenWidth}x{screenHeight}, mapRadius={mapRadius}")
 
-        displayTables = generate_display_tables(screenWidth, screenHeight, mapRadius)
-        generate_display_header_file(outputDir, screenWidth, screenHeight, mapRadius, displayTables)
+        displayTables = generate_display_tables(
+            screenWidth, screenHeight, mapRadius)
+        generate_display_header_file(
+            outputDir, screenWidth, screenHeight, mapRadius, displayTables)
     else:
         print("Usage: tablegen.py <output_dir> [display_type]")
         print("       tablegen.py <output_dir> --all")

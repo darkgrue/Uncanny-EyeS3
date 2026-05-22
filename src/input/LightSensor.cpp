@@ -1,8 +1,23 @@
+/**
+ * @file LightSensor.cpp
+ * @brief Implementation of ambient light sensor for pupil size control.
+ *
+ * Auto-detects sensor connection by sampling ADC readings over ~250ms and
+ * requiring a minimum variance (range >= 150 counts). When connected, performs
+ * a 16-sample calibration to establish min/max bounds for normalization.
+ */
 #include <Arduino.h>
 #include "LightSensor.h"
 
 LightSensor::LightSensor(int pin) : m_pin(pin) {}
 
+/**
+ * @brief Initialize the light sensor and detect connection status.
+ *
+ * Takes 8 samples spaced 15ms apart (~120ms total). A real photoresistor circuit
+ * shows variance >= 150 counts as ambient light fluctuates naturally. Lower variance
+ * indicates a floating pin, so m_connected is set to false.
+ */
 bool LightSensor::begin()
 {
   pinMode(m_pin, INPUT);
@@ -30,12 +45,7 @@ bool LightSensor::begin()
   uint16_t avg = sum / 8;
   uint16_t range = maxSample - minSample;
 
-  // A real photoresistor in a voltage divider shows a wide range of readings
-  // when light changes (typically 200+ counts from dark to bright).
-  // A floating/unconnected pin shows small noise (typically <150 counts range).
-  // Require range > 150 to consider it a real sensor.
-
-  if (range < 150)
+  if (avg < LIGHT_LOWER_ADC_THRESHOLD)
   {
     m_connected = false;
     Serial.printf("[LightSensor] Pin %d: No sensor connected (avg: %d, range: %d)\n", m_pin, avg, range);
@@ -52,6 +62,13 @@ bool LightSensor::begin()
   return m_connected;
 }
 
+/**
+ * @brief Establish calibration range for the connected sensor.
+ *
+ * Collects 16 samples spaced 20ms apart (~320ms total) to find the ambient light
+ * dynamic range. If minSample > 50 and range > 100, uses those as calibrated bounds.
+ * Otherwise defaults to 0-1023 (full ADC range).
+ */
 void LightSensor::estimateRange()
 {
   if (!m_connected)
@@ -99,6 +116,14 @@ void LightSensor::estimateRange()
   m_rawValue = avg;
 }
 
+/**
+ * @brief Sample the sensor and compute the current pupil factor.
+ *
+ * Reads raw ADC, normalizes to 0.0-1.0 using calibrated min/max, applies optional
+ * power curve, then computes pupilFactor = 1.0 - normalizedValue.
+ *
+ * @return true if sensor is connected and was updated, false otherwise.
+ */
 bool LightSensor::update()
 {
   if (!m_connected)
@@ -128,6 +153,9 @@ bool LightSensor::update()
   return true;
 }
 
+/**
+ * @brief Manually override the calibration min/max values.
+ */
 void LightSensor::setMinMax(uint16_t minVal, uint16_t maxVal)
 {
   m_minValue = minVal;

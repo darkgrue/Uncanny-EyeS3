@@ -1,3 +1,12 @@
+/**
+ * @file DisplayGeometry.h
+ * @brief Display geometry helpers, polar maps, and circular clipping.
+ *
+ * Provides display size constants, polar coordinate conversion helpers,
+ * EyelidData and PolarMapData structures used by eye definitions, and
+ * the CircularClip class for efficient per-scanline circle boundary
+ * computation (precomputed once, reused every frame to avoid sqrt()).
+ */
 #ifndef DISPLAY_GEOMETRY_H
 #define DISPLAY_GEOMETRY_H
 
@@ -5,106 +14,91 @@
 #include <vector>
 #include <cmath>
 
-// Display geometry constants
-// Max resolution supported: 480x480 (T-RGB)
-#define MAX_DISPLAY_SIZE 480
-#define MAP_MAX_RADIUS   240  // Maximum polar map radius (half of max display)
+#define MAX_DISPLAY_SIZE 480 // Maximum supported display dimension
+#define MAP_MAX_RADIUS 240   // Half of maximum display size
 
-// Default eye radii for different displays
-#define EYE_RADIUS_AMOLED 233  // ~466 / 2
-#define EYE_RADIUS_TRGB   240  // ~480 / 2
+#define EYE_RADIUS_AMOLED 233 // AMOLED eye radius (~466 / 2)
+#define EYE_RADIUS_TRGB 240   // T-RGB eye radius (~480 / 2)
 
-// Eyelid shape data (255 = no data for that column)
-struct EyelidData {
-    uint8_t upperOpen[MAX_DISPLAY_SIZE];
-    uint8_t upperClosed[MAX_DISPLAY_SIZE];
-    uint8_t lowerOpen[MAX_DISPLAY_SIZE];
-    uint8_t lowerClosed[MAX_DISPLAY_SIZE];
+/**
+ * @brief Custom eyelid shape data from eye definition.
+ *
+ * Contains per-column Y positions for upper and lower eyelids in both
+ * open and closed states. Values of 255 indicate no data for that column.
+ */
+struct EyelidData
+{
+  uint8_t upperOpen[MAX_DISPLAY_SIZE];
+  uint8_t upperClosed[MAX_DISPLAY_SIZE];
+  uint8_t lowerOpen[MAX_DISPLAY_SIZE];
+  uint8_t lowerClosed[MAX_DISPLAY_SIZE];
 };
 
-// Polar map data - allocated based on display size
-struct PolarMapData {
-    uint16_t* angle;      // [mapDiameter * mapDiameter]
-    uint8_t*  dist;         // [mapDiameter * mapDiameter]
-    uint8_t*  displaceX;    // [mapDiameter/2 * mapDiameter/2]
-    uint8_t*  displaceY;    // [mapDiameter/2 * mapDiameter/2]
-    uint16_t  radius;        // Map radius
-    uint16_t  diameter;     // Map diameter (radius * 2)
+/**
+ * @brief Precomputed polar displacement map for an eye.
+ *
+ * Allocated based on display size. Contains angle, distance, and X/Y
+ * displacement lookup tables for fast per-pixel eye rendering.
+ */
+struct PolarMapData
+{
+  uint16_t *angle;    // Angle lookup [diameter * diameter]
+  uint8_t *dist;      // Distance lookup [diameter * diameter]
+  uint8_t *displaceX; // X displacement lookup [radius * diameter]
+  uint8_t *displaceY; // Y displacement lookup [radius * diameter]
+  uint16_t radius;    // Map radius in pixels
+  uint16_t diameter;  // Map diameter in pixels
 };
 
-// Screen coordinate conversion helpers
-// Convert screen position to polar map coordinates
-inline int16_t screenToMap(int16_t screenPos, int16_t mapRadius, int16_t displaySize) {
-    return screenPos - (displaySize / 2) + mapRadius;
-}
-
-// Convert polar map coordinates to screen position
-inline int16_t mapToScreen(int16_t mapPos, int16_t mapRadius, int16_t displaySize) {
-    return mapPos + (displaySize / 2) - mapRadius;
-}
-
-// Calculate map radius based on display size and coverage factor
-// coverage = 0.6 means the polar map covers 60% of the hemisphere
-inline uint16_t calcMapRadius(uint16_t displaySize, float coverage = 0.6f) {
-    // Eye radius is approximately displaySize/2
-    // Map radius = eyeRadius * PI/2 * coverage
-    return (uint16_t)((displaySize / 2.0f) * 3.14159f * coverage);
-}
-
-// Precomputed scanline bounds for circular clipping
-// Computed once at init, reused every frame to avoid sqrt() per row
-struct ScanlineBounds {
-    int16_t xStart;
-    int16_t xEnd;
+/** @brief Precomputed scanline extent for circular clipping. */
+struct ScanlineBounds
+{
+  int16_t xStart; // First active X in this row (-1 if outside circle)
+  int16_t xEnd;   // Last active X in this row
 };
 
-class CircularClip {
+/**
+ * @brief Efficient circular clipping bounds precomputer.
+ *
+ * Computes xStart/xEnd for every scanline once at initialization,
+ * avoiding per-pixel sqrt() calls during rendering.
+ */
+class CircularClip
+{
 public:
-    void compute(int centerX, int centerY, int radius, int width, int height) {
-        m_centerX = centerX;
-        m_centerY = centerY;
-        m_radius = radius;
-        m_width = width;
-        m_height = height;
-        m_bounds.resize(height);
+  /**
+   * @brief Precompute circular bounds for the given circle.
+   * @param centerX Circle center X.
+   * @param centerY Circle center Y.
+   * @param radius Circle radius.
+   * @param width Frame buffer width.
+   * @param height Frame buffer height.
+   */
+  void compute(int centerX, int centerY, int radius, int width, int height);
 
-        int32_t radiusSq = (int32_t)radius * radius;
-        int32_t centerXR = centerX;
+  /** @brief Returns true if this row intersects the circle. */
+  bool isRowActive(int y) const
+  {
+    return y >= 0 && y < m_height && m_bounds[y].xStart >= 0;
+  }
 
-        for (int y = 0; y < height; y++) {
-            int32_t distY = y - centerY;
-            int32_t distYSq = distY * distY;
+  /** @brief First active X in row y. */
+  int16_t getXStart(int y) const { return m_bounds[y].xStart; }
 
-            if (distYSq < radiusSq) {
-                int32_t xExtentSq = radiusSq - distYSq;
-                int16_t xExtent = (int16_t)sqrt((float)xExtentSq);
-                m_bounds[y].xStart = centerXR - xExtent;
-                m_bounds[y].xEnd = centerXR + xExtent;
-            } else {
-                m_bounds[y].xStart = -1;
-                m_bounds[y].xEnd = -1;
-            }
-        }
-    }
+  /** @brief Last active X in row y. */
+  int16_t getXEnd(int y) const { return m_bounds[y].xEnd; }
 
-    bool isRowActive(int y) const {
-        return y >= 0 && y < m_height && m_bounds[y].xStart >= 0;
-    }
-
-    int16_t getXStart(int y) const { return m_bounds[y].xStart; }
-    int16_t getXEnd(int y) const { return m_bounds[y].xEnd; }
-
-    int getCenterX() const { return m_centerX; }
-    int getCenterY() const { return m_centerY; }
-    int getRadius() const { return m_radius; }
+  int getCenterX() const { return m_centerX; }
+  int getCenterY() const { return m_centerY; }
+  int getRadius() const { return m_radius; }
 
 private:
-    int m_centerX = 0;
-    int m_centerY = 0;
-    int m_radius = 0;
-    int m_width = 0;
-    int m_height = 0;
-    std::vector<ScanlineBounds> m_bounds;
+  int m_centerX = 0;
+  int m_centerY = 0;
+  int m_radius = 0;
+  int m_width = 0;
+  int m_height = 0;
+  std::vector<ScanlineBounds> m_bounds;
 };
 
 #endif // DISPLAY_GEOMETRY_H

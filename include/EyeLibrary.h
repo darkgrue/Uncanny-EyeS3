@@ -6,17 +6,18 @@
 #include "eyes/eagle_466.h"
 #include "eyes/human_eye_466.h"
 
-static const EyeDefinition* const s_eyeRegistry[] = {
+static const EyeDefinition *const s_eyeRegistry[] = {
     &default_eye::eye,
     &eagle::eye,
-    &human_eye::eye
-};
+    &human_eye::eye};
 
 static constexpr int s_eyeCount = 3;
 
-inline const char* getEyeName(int index) {
-    if (index < 0 || index >= s_eyeCount) return nullptr;
-    return s_eyeRegistry[index]->name;
+inline const char *getEyeName(int index)
+{
+  if (index < 0 || index >= s_eyeCount)
+    return nullptr;
+  return s_eyeRegistry[index]->name;
 }
 
 #elif defined(ARDUINO_LILYGO_T_RGB)
@@ -25,17 +26,18 @@ inline const char* getEyeName(int index) {
 #include "eyes/eagle_480.h"
 #include "eyes/human_eye_480.h"
 
-static const EyeDefinition* const s_eyeRegistry[] = {
+static const EyeDefinition *const s_eyeRegistry[] = {
     &default_eye::eye,
     &eagle::eye,
-    &human_eye::eye
-};
+    &human_eye::eye};
 
 static constexpr int s_eyeCount = 3;
 
-inline const char* getEyeName(int index) {
-    if (index < 0 || index >= s_eyeCount) return nullptr;
-    return s_eyeRegistry[index]->name;
+inline const char *getEyeName(int index)
+{
+  if (index < 0 || index >= s_eyeCount)
+    return nullptr;
+  return s_eyeRegistry[index]->name;
 }
 
 #endif

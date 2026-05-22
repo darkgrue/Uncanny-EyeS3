@@ -2,9 +2,9 @@ Import("env")
 
 my_flags = env.ParseFlags(env['BUILD_FLAGS'])
 
-#import pprint
-#print("[rename_firmware] Parsed BUILD_FLAGS:")
-#pprint.pprint(my_flags)
+# import pprint
+# print("[rename_firmware] Parsed BUILD_FLAGS:")
+# pprint.pprint(my_flags)
 
 defines = dict()
 for b in my_flags.get("CPPDEFINES"):

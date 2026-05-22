@@ -1,3 +1,11 @@
+/**
+ * @file WiiChuck.cpp
+ * @brief Implementation of Wii Nunchuck controller input.
+ *
+ * Communication via I2C at 400kHz. The Nunchuck requires initialization
+ * sequence: 0xF0/0x55 to enter mode, then 0xFB/0x00 to request raw data.
+ * Joystick is decoded from bytes 0-1 (centered at 0x80) and buttons from byte 5.
+ */
 #include "WiiChuck.h"
 #include "config/BoardPins.h"
 #include <Arduino.h>
@@ -7,22 +15,20 @@ WiiChuckInput::WiiChuckInput(uint8_t address)
 {
 }
 
+/**
+ * @brief Initialize I2C communication with the Nunchuck.
+ *
+ * Starts Wire if not already running, then sends the two-step initialization
+ * sequence expected by the Nunchuck protocol. Performs an initial read to
+ * confirm the device is responsive.
+ */
 bool WiiChuckInput::begin()
 {
-  // Only call Wire.begin() if it hasn't been started yet
-  // This prevents "Bus already started" warnings when SY6970 or other
-  // peripherals have already initialized the I2C bus
-  // Note: Wire doesn't have a native "isStarted()" check, so we track it ourselves
-  // If Wire was already started by another component, we just set the clock
   static bool wireStarted = false;
   if (!wireStarted)
   {
     Wire.begin(BOARD_I2C_SDA, BOARD_I2C_SCL);
     wireStarted = true;
-  }
-  else
-  {
-    // Wire already started - just ensure clock is set
   }
   Wire.setClock(400000);
 
@@ -47,11 +53,18 @@ bool WiiChuckInput::begin()
 
   delay(1);
 
-  // Initial read
   readData();
   return true;
 }
 
+/**
+ * @brief Read and decode joystick and button state from Nunchuck.
+ *
+ * Requests 6 bytes from the device. Byte 0 = joystick X (0x80 = center),
+ * byte 1 = joystick Y (0x80 = center), byte 5 = button bits (bit 0 = Z,
+ * bit 1 = C, active-low). Joystick values outside the 10-count deadzone
+ * set m_hasStick = true to claim exclusive control.
+ */
 void WiiChuckInput::readData()
 {
   int joyX = 0, joyY = 0;
@@ -66,18 +79,13 @@ void WiiChuckInput::readData()
     m_status[4] = Wire.read();
     m_status[5] = Wire.read();
 
-    // Decode joystick (typically 0x80 is center)
     joyX = (int)m_status[0] - 0x80;
     joyY = (int)m_status[1] - 0x80;
 
-    // Z button (bit 0) - held for close
     m_zPressed = !(m_status[5] & 0x01);
-
-    // C button (bit 1) - held for wide
     m_cPressed = !((m_status[5] >> 1) & 0x01);
   }
 
-  // Convert to normalized values
   if (abs(joyX) > 10 || abs(joyY) > 10)
   {
     m_hasStick = true;
@@ -89,14 +97,12 @@ void WiiChuckInput::readData()
     m_hasStick = false;
   }
 
-  // Z button edge-triggered blink (on press only)
   if (m_zPressed && !m_lastZPressed)
   {
     m_wantsBlink = true;
   }
   m_lastZPressed = m_zPressed;
 
-  // C button edge-triggered boop (on press only)
   if (m_cPressed && !m_lastCPressed)
   {
     m_wantsBoop = true;
@@ -104,12 +110,17 @@ void WiiChuckInput::readData()
   m_lastCPressed = m_cPressed;
 }
 
+/**
+ * @brief Poll the Nunchuck at ~60Hz.
+ *
+ * Reads are throttled to prevent bus flooding. Returns true on each
+ * actual read so callers know when fresh data is available.
+ */
 bool WiiChuckInput::update()
 {
   uint32_t now = micros();
   static uint32_t lastRead = 0;
 
-  // Read at ~60Hz
   if (now - lastRead > 16667)
   {
     readData();
