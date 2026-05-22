@@ -15,6 +15,7 @@ A port of the [Adafruit M4 Eyes](https://github.com/adafruit/Adafruit_Learning_S
 
 - Nintendo Wii Nunchuk (WiiChuck) — I2C puppeteering controller
 - LDR photoresistor — ambient light-driven pupil dilation
+- DFRobot Gravity Gesture & Face Detection Sensor — AI face tracking for eye targeting
 - SY6970 — battery fuel gauge / charger (on-board, auto-initialized)
 
 ---
@@ -24,6 +25,7 @@ A port of the [Adafruit M4 Eyes](https://github.com/adafruit/Adafruit_Learning_S
 - **Autonomous animation** — saccadic eye movement with a lognormal amplitude distribution, centering bias, and sigmoid velocity easing for naturalistic motion
 - **Realistic blinking** — three-phase FSM (close → pause → open) with randomized timing and burst probability
 - **WiiChuck puppeteering** — joystick-driven eye targeting with edge-triggered blink/boop and hold commands for close/wide expressions
+- **Face tracking** — AI gesture & face sensor directs gaze to the nearest detected face, overriding autonomous movement while yielding to WiiChuck joystick
 - **Light sensor pupil control** — photoresistor drives pupil dilation; falls back to autonomous iris animation when not connected
 - **Multi-eye ESP-NOW sync** — one device acts as controller, others follow with interpolated state at up to ~120 FPS
 - **Runtime eye switching** — switch between registered eye designs over serial without reflashing
@@ -250,6 +252,40 @@ When connected:
 
 ---
 
+## Gesture & Face Detection Sensor
+
+The [DFRobot Gravity Offline Edge AI Gesture & Face Detection](https://www.dfrobot.com/product-2914.html) sensor connects to the same I2C bus as the WiiChuck (see [WiiChuck Controller](#wiichuck-controller) for pin assignments). It is auto-detected at startup; if not found, the firmware continues without face tracking.
+
+I2C address: `0x72`.
+
+When at least one face is detected with a confidence score at or above the minimum threshold (default 50 out of 100), the eye tracks the nearest face. When no face is visible the eye returns to autonomous random movement.
+
+Face position is reported in camera pixel coordinates. The default normalization assumes a 320×240 frame; pass custom width/height values to the `GestureFaceInput` constructor if the sensor reports a different resolution. Call `setMinScore()` to adjust the confidence threshold.
+
+---
+
+## Input Priority
+
+### Movement Priority
+
+The first active source in the following order controls eye position each frame:
+
+1. **WiiChuck joystick** — when the joystick is tilted beyond the ±10 dead zone, it takes exclusive control and suppresses all other movement sources.
+2. **Gesture & face detection** — when a face is detected with sufficient confidence, the eye tracks the face. Control is released immediately when no face is visible.
+3. **ESP-NOW network controller** — a paired controller device broadcasts its state; followers apply it when data is fresher than 100 ms.
+4. **Autonomous random saccades** — lognormal amplitude distribution with centering bias and sigmoid easing; the default when no input is active.
+
+### Pupil Sizing Priority
+
+Pupil size is driven by whichever source is available:
+
+1. **Light sensor (LDR)** — maps ambient light to pupil dilation at 10 Hz when connected.
+2. **Autonomous iris animation** — simulates natural pupillary unrest using lognormal targets and smoothstep easing when no light sensor is present.
+
+Face detection and ESP-NOW do not affect pupil size.
+
+---
+
 ## User Extension Hooks
 
 Implement `user_setup()` and `user_loop()` in `src/user/user_hooks.cpp` to add custom behavior without modifying core code. `user_loop()` runs during the render task — keep it short.
@@ -285,6 +321,7 @@ src/
   input/
     WiiChuck                # Wii Nunchuk I2C driver
     LightSensor             # LDR photoresistor pupil control
+    GestureFaceInput        # DFRobot Gravity Gesture & Face Detection sensor
   network/
     EyeSync                 # ESP-NOW controller/follower synchronization
   common/

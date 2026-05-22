@@ -42,6 +42,14 @@ public:
   /** @brief Attach an input source (e.g., WiiChuckInput). nullptr to clear. */
   void setInput(InputBase *input) { m_input = input; }
 
+  /**
+   * @brief Attach a secondary face-tracking input (e.g., GestureFaceInput).
+   *
+   * When set, the face sensor drives eye position if the primary input
+   * (WiiChuck) does not have exclusive control. nullptr to disable.
+   */
+  void setFaceInput(InputBase *face) { m_faceInput = face; }
+
   /** @brief Attach a network sync manager. nullptr if solo operation. */
   void setSyncManager(EyeSyncManager *sync) { m_sync = sync; }
 
@@ -132,7 +140,8 @@ private:
   void processNetworkInput();
 
   DisplayHAL *m_display = nullptr;  // Display abstraction layer
-  InputBase *m_input = nullptr;     // Active input source
+  InputBase *m_input = nullptr;     // Primary input source (e.g. WiiChuck)
+  InputBase *m_faceInput = nullptr; // Secondary input source (e.g. GestureFace)
   EyeSyncManager *m_sync = nullptr; // ESP-NOW sync manager
 
   const EyeDefinition *m_eyeDef = nullptr; // Current eye definition
@@ -158,15 +167,16 @@ private:
   float m_irisNext[IRIS_LEVELS] = {0};
   uint16_t m_irisFrame = 0;
 
-  float m_irisTarget = 0.0f;                  // Target iris offset (-0.5 to +0.5)
-  float m_irisSmooth = 0.0f;                  // Smoothed iris value after easing
-  uint32_t m_lastIrisChange = 0;              // Timestamp of last target change
+  float m_irisTarget = 0.0f;               // Target iris offset (-0.5 to +0.5)
+  float m_irisSmooth = 0.0f;               // Smoothed iris value after easing
+  uint32_t m_lastIrisChange = 0;           // Timestamp of last target change
   uint32_t m_irisHoldDuration = 3000;      // Hold time between changes (ms)
   uint32_t m_irisTransitionDuration = 800; // Transition duration (ms)
 
-  bool m_booped = false;      // True when boop expression is active
-  bool m_needsRender = true;  // Flag to request a new frame render
-  bool m_initialized = false; // True after successful begin()
+  bool m_faceWasTracking = false; // True when face input had control last frame
+  bool m_booped = false;          // True when boop expression is active
+  bool m_needsRender = true;      // Flag to request a new frame render
+  bool m_initialized = false;     // True after successful begin()
 };
 
 #endif // EYE_ANIMATOR_H

@@ -111,9 +111,11 @@ bool EyeAnimator::setEyeIndex(int index)
 /**
  * @brief Main animation update — call frequently from the render task.
  *
- * Updates the input device, applies network input, advances the movement
- * system and blink FSM, and updates either the light sensor value or
- * the autonomous iris. Marks needsRender = true after processing.
+ * Resolves eye position from input sources in priority order: primary input
+ * (WiiChuck, exclusive control) → face detection (m_faceInput, face visible)
+ * → autonomous random saccades. Applies network input, advances the movement
+ * system and blink FSM, and updates either the light sensor value or the
+ * autonomous iris. Marks needsRender = true after processing.
  *
  * @param now Current time in milliseconds.
  */
@@ -123,40 +125,64 @@ void EyeAnimator::update(uint32_t now)
     return;
 
   if (m_input)
-  {
     m_input->update();
+  if (m_faceInput)
+    m_faceInput->update();
 
-    if (m_input->hasExclusiveControl())
+  if (m_input && m_input->hasExclusiveControl())
+  {
+    // Priority 1: WiiChuck joystick beyond dead zone.
+    m_faceWasTracking = false;
+    m_movement.setTarget(m_input->getTargetX(), m_input->getTargetY());
+    m_movement.setRandomMode(false);
+
+    if (m_input->wantsBlink())
     {
-      m_movement.setTarget(m_input->getTargetX(), m_input->getTargetY());
-      m_movement.setRandomMode(false);
-
-      if (m_input->wantsBlink())
-      {
-        eyesBlink();
-        m_input->clearBlinkFlag();
-      }
-      if (m_input->wantsBoop())
-      {
-        eyesBoop();
-        m_input->clearBoopFlag();
-      }
-
-      if (m_input->wantsWide())
-      {
-        eyesWide();
-      }
-      else if (m_input->wantsClose())
-      {
-        eyesClose();
-      }
-      else
-      {
-        eyesNormal();
-      }
+      eyesBlink();
+      m_input->clearBlinkFlag();
     }
-    else if (!m_movement.isMoving() && m_movement.getTargetX() == 0 && m_movement.getTargetY() == 0)
+    if (m_input->wantsBoop())
     {
+      eyesBoop();
+      m_input->clearBoopFlag();
+    }
+
+    if (m_input->wantsWide())
+    {
+      eyesWide();
+    }
+    else if (m_input->wantsClose())
+    {
+      eyesClose();
+    }
+    else
+    {
+      eyesNormal();
+    }
+  }
+  else if (m_faceInput && m_faceInput->hasExclusiveControl())
+  {
+    // Priority 2: Face detection — a face is visible and above confidence threshold.
+    m_faceWasTracking = true;
+    m_movement.setTargetAcquired();
+    m_movement.setTarget(m_faceInput->getTargetX(), m_faceInput->getTargetY());
+    m_movement.setRandomMode(false);
+  }
+  else
+  {
+    // Priority 3: Autonomous random movement.
+    if (m_faceWasTracking)
+    {
+      // Face just dropped out — release to autonomous immediately.
+      m_movement.setTargetLost();
+      m_movement.setRandomMode(true);
+      m_faceWasTracking = false;
+    }
+    else if (m_input && !m_movement.isMoving() &&
+             m_movement.getTargetX() == 0 && m_movement.getTargetY() == 0)
+    {
+      // WiiChuck joystick returned to center — wait for any in-progress movement
+      // to finish, then hand back to autonomous mode.
       m_movement.setTargetLost();
       m_movement.setRandomMode(true);
     }

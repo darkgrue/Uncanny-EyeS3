@@ -3,7 +3,7 @@
  * @brief Main entry point for the Uncanny Eyes ESP32 firmware.
  *
  * Initializes display, power management (SY6970), input devices
- * (WiiChuck, LightSensor), and network (ESP-NOW). Runs the eye
+ * (WiiChuck, LightSensor, GestureFaceInput), and network (ESP-NOW). Runs the eye
  * animation at ~120 FPS on a dedicated FreeRTOS task pinned to
  * Core 1, with a lightweight status loop on loop().
  *
@@ -22,6 +22,7 @@
 #include "eye/EyeAnimator.h"
 #include "input/WiiChuck.h"
 #include "input/LightSensor.h"
+#include "input/GestureFaceInput.h"
 #include "network/EyeSync.h"
 #include "debug/DebugOverlay.h"
 #include "eyes.h"
@@ -35,6 +36,7 @@ static EyeProjectConfig s_config;
 static EyeAnimator *s_animator = nullptr;
 static DisplayHAL *s_display = nullptr;
 static WiiChuckInput *s_wiiChuck = nullptr;
+static GestureFaceInput *s_gestureFace = nullptr;
 static EyeSyncManager *s_syncManager = nullptr;
 static EyeInterpolator *s_interpolator = nullptr;
 static LightSensor *s_lightSensor = nullptr;
@@ -181,6 +183,21 @@ void setupInput()
 }
 
 /**
+ * @brief Initialize the DFRobot Gesture & Face Detection sensor.
+ *
+ * Optional peripheral — prints a diagnostic message and sets s_gestureFace
+ * if found. The sensor shares the I2C bus with the WiiChuck.
+ */
+void setupGestureFace()
+{
+  static GestureFaceInput gfd;
+  if (gfd.begin())
+  {
+    s_gestureFace = &gfd;
+  }
+}
+
+/**
  * @brief Configure the EyeAnimator with the detected light sensor.
  *
  * Reads the sensor's calibrated min/max and curve values and passes
@@ -242,9 +259,10 @@ void setupNetwork()
 /**
  * @brief Firmware initialization: peripherals, display, inputs, and animation.
  *
- * Initializes Serial, SY6970, display, debug overlay, inputs, network,
- * and the EyeAnimator. Creates the renderLoopTask on Core 1 at priority 1.
- * This function does not return until the render task takes over.
+ * Initializes Serial, SY6970, display, debug overlay, WiiChuck, light sensor,
+ * gesture/face sensor, network, and the EyeAnimator. Creates the renderLoopTask
+ * on Core 1 at priority 1. This function does not return until the render task
+ * takes over.
  */
 void setup()
 {
@@ -276,6 +294,8 @@ void setup()
 
   setupInput();
 
+  setupGestureFace();
+
   setupNetwork();
 
   s_animator = new EyeAnimator();
@@ -290,6 +310,10 @@ void setup()
   if (s_wiiChuck)
   {
     s_animator->setInput(s_wiiChuck);
+  }
+  if (s_gestureFace)
+  {
+    s_animator->setFaceInput(s_gestureFace);
   }
   if (s_syncManager)
   {
@@ -396,6 +420,8 @@ void loop()
     Serial.printf("[%" PRIu32 "] Running...", now / 1000);
     if (s_wiiChuck)
       Serial.print(" WiiChuck");
+    if (s_gestureFace)
+      Serial.print(" GestureFace");
     if (s_syncManager)
       Serial.printf(" ESP-NOW(%d peers)", s_syncManager->getPeerCount());
     Serial.println();
