@@ -16,7 +16,6 @@
         "color": 65281,
         "angle": 0,
         "spin": 0,
-        "iSpin": 0,
         "mirror": false
     },
     "sclera": {
@@ -24,7 +23,6 @@
         "color": 65535,
         "angle": 0,
         "spin": 0,
-        "iSpin": 0,
         "mirror": false
     },
     "eyelid": {

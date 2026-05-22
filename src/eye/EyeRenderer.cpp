@@ -104,11 +104,13 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
     int offsetX = (int)(eyeX * (m_displaySize / 4));
     int offsetY = (int)(eyeY * (m_displaySize / 4));
 
-    // Compute bounding box to skip unnecessary pixels
-    int minX = centerX + offsetX - eyeRadius;
-    int maxX = centerX + offsetX + eyeRadius;
-    int minY = centerY + offsetY - eyeRadius;
-    int maxY = centerY + offsetY + eyeRadius;
+    // Compute bounding box to include full eye circle at any position
+    // Eye center can be offset by eyeRadius in any direction before edges clip
+    int margin = eyeRadius;  // Full eye radius as margin
+    int minX = centerX + offsetX - margin;
+    int maxX = centerX + offsetX + margin;
+    int minY = centerY + offsetY - margin;
+    int maxY = centerY + offsetY + margin;
 
     // Clamp to display bounds
     minX = (minX < 0) ? 0 : minX;

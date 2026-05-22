@@ -121,7 +121,8 @@ def generate_displacement_map(screenWidth, screenHeight, mapRadius, eyeRadius):
                     # Angle from center
                     angle = math.atan2(dx, dy)
                     # Spherical projection offset
-                    sphericalOffset = math.sin(math.acos(d / eyeRadius)) * mapRadius
+                    sphericalOffset = math.sin(
+                        math.acos(d / eyeRadius)) * mapRadius
                     # Displacement = spherical projection - original position
                     dispX = int(sphericalOffset * math.sin(angle) - dx) & 0xFF
                     dispMap[y * halfW + x] = dispX
@@ -142,7 +143,8 @@ def generate_eyelid_lookup(image, screenWidth, screenHeight):
     pixels = image.convert("L").load()
 
     if image.size != (screenWidth, screenHeight):
-        raise Exception(f"Eyelid image must be {screenWidth}x{screenHeight}, got {image.size}")
+        raise Exception(
+            f"Eyelid image must be {screenWidth}x{screenHeight}, got {image.size}")
 
     lookup = np.zeros(screenWidth * 2, dtype=np.uint8)
 
@@ -192,10 +194,12 @@ def generate_display_header(outputDir, screenWidth, screenHeight, mapRadius):
     eyeRadius = mapRadius
 
     # Generate polar maps for this display
-    polarAngle, polarDist = generate_polar_maps(mapRadius, eyeRadius, eyeRadius)
+    polarAngle, polarDist = generate_polar_maps(
+        mapRadius, eyeRadius, eyeRadius)
 
     # Generate displacement map
-    dispMap, halfW, halfH = generate_displacement_map(screenWidth, screenHeight, mapRadius, eyeRadius)
+    dispMap, halfW, halfH = generate_displacement_map(
+        screenWidth, screenHeight, mapRadius, eyeRadius)
 
     return {
         "polarAngle": (polarAngle, f"polarAngle_{mapRadius}"),
@@ -230,7 +234,6 @@ def generate_eye_header(outputDir, config, screenWidth, screenHeight, mapRadius,
     irisColor = iris.get("color", 0xFF01)
     irisAngle = iris.get("angle", 0)
     irisSpin = iris.get("spin", 0)
-    irisISpin = iris.get("iSpin", 0)
     irisMirror = 1023 if iris.get("mirror", False) else 0
 
     # Sclera config
@@ -238,7 +241,6 @@ def generate_eye_header(outputDir, config, screenWidth, screenHeight, mapRadius,
     scleraColor = sclera.get("color", 0xFFFF)
     scleraAngle = sclera.get("angle", 0)
     scleraSpin = sclera.get("spin", 0)
-    scleraISpin = sclera.get("iSpin", 0)
     scleraMirror = 1023 if sclera.get("mirror", False) else 0
 
     # Eyelid config
@@ -264,9 +266,11 @@ def generate_eye_header(outputDir, config, screenWidth, screenHeight, mapRadius,
     with open(headerPath, "w") as f:
         f.write("#pragma once\n\n")
         f.write("#include <Arduino.h>\n")
-        f.write('#include "../eyes.h"\n\n')
+        f.write('#include "eyes.h"\n')
+        f.write(f'#include "display_{dispType}.h"\n\n')
 
-        f.write(f"// Eye: {eyeName} for {screenWidth}x{screenHeight} display\n")
+        f.write(
+            f"// Eye: {eyeName} for {screenWidth}x{screenHeight} display\n")
         f.write(f"// Map radius: {mapRadius}\n")
         f.write(f"// Eye radius fraction: {radiusFraction}\n\n")
 
@@ -279,21 +283,27 @@ def generate_eye_header(outputDir, config, screenWidth, screenHeight, mapRadius,
 
         if upperFilename:
             upperImg = Image.open(baseDir / upperFilename)
-            upperLookup = generate_eyelid_lookup(upperImg, screenWidth, screenHeight)
-            f.write(f"const uint8_t {upperName}[{screenWidth} * 2] PROGMEM = {{\n")
+            upperLookup = generate_eyelid_lookup(
+                upperImg, screenWidth, screenHeight)
+            f.write(
+                f"const uint8_t {upperName}[{screenWidth} * 2] PROGMEM = {{\n")
             output_hex_array(f, upperLookup)
             f.write("};\n\n")
         else:
-            f.write(f"const uint8_t {upperName}[{screenWidth} * 2] PROGMEM = {{0}};\n\n")
+            f.write(
+                f"const uint8_t {upperName}[{screenWidth} * 2] PROGMEM = {{0}};\n\n")
 
         if lowerFilename:
             lowerImg = Image.open(baseDir / lowerFilename)
-            lowerLookup = generate_eyelid_lookup(lowerImg, screenWidth, screenHeight)
-            f.write(f"const uint8_t {lowerName}[{screenWidth} * 2] PROGMEM = {{\n")
+            lowerLookup = generate_eyelid_lookup(
+                lowerImg, screenWidth, screenHeight)
+            f.write(
+                f"const uint8_t {lowerName}[{screenWidth} * 2] PROGMEM = {{\n")
             output_hex_array(f, lowerLookup)
             f.write("};\n\n")
         else:
-            f.write(f"const uint8_t {lowerName}[{screenWidth} * 2] PROGMEM = {{0}};\n\n")
+            f.write(
+                f"const uint8_t {lowerName}[{screenWidth} * 2] PROGMEM = {{0}};\n\n")
 
         # Iris texture
         irisFilename = iris.get("filename")
@@ -304,7 +314,8 @@ def generate_eye_header(outputDir, config, screenWidth, screenHeight, mapRadius,
             irisW, irisH = irisImg.size
             f.write(f"constexpr uint16_t {irisDataName}Width = {irisW};\n")
             f.write(f"constexpr uint16_t {irisDataName}Height = {irisH};\n")
-            f.write(f"const uint16_t {irisDataName}[{irisW} * {irisH}] PROGMEM = {{\n")
+            f.write(
+                f"const uint16_t {irisDataName}[{irisW} * {irisH}] PROGMEM = {{\n")
             pixels = irisImg.load()
             for y in range(irisH):
                 for x in range(irisW):
@@ -323,8 +334,10 @@ def generate_eye_header(outputDir, config, screenWidth, screenHeight, mapRadius,
             scleraImg = Image.open(baseDir / scleraFilename).convert("RGB")
             scleraW, scleraH = scleraImg.size
             f.write(f"constexpr uint16_t {scleraDataName}Width = {scleraW};\n")
-            f.write(f"constexpr uint16_t {scleraDataName}Height = {scleraH};\n")
-            f.write(f"const uint16_t {scleraDataName}[{scleraW} * {scleraH}] PROGMEM = {{\n")
+            f.write(
+                f"constexpr uint16_t {scleraDataName}Height = {scleraH};\n")
+            f.write(
+                f"const uint16_t {scleraDataName}[{scleraW} * {scleraH}] PROGMEM = {{\n")
             pixels = scleraImg.load()
             for y in range(scleraH):
                 for x in range(scleraW):
@@ -343,24 +356,30 @@ def generate_eye_header(outputDir, config, screenWidth, screenHeight, mapRadius,
         f.write(f"{trackingStr}, {squint}, {dispName},\n")
 
         # Pupil
-        f.write(f"      {{ 0x{pupilColor:04X}, {slitRadius}, {pupilMinFraction}, {pupilMaxFraction} }},\n")
+        f.write(
+            f"      {{ 0x{pupilColor:04X}, {slitRadius}, {pupilMinFraction}, {pupilMaxFraction} }},\n")
 
         # Iris
         if irisDataName:
-            f.write(f"      {{ {irisRadiusFraction}, {{ {irisDataName}, {irisDataName}Width, {irisDataName}Height }}, ")
+            f.write(
+                f"      {{ {irisRadiusFraction}, {{ {irisDataName}, {irisDataName}Width, {irisDataName}Height }}, ")
         else:
             f.write(f"      {{ {irisRadiusFraction}, {{ nullptr, 0, 0 }}, ")
-        f.write(f"0x{irisColor:04X}, {irisAngle}, {irisSpin}, {irisISpin}, {irisMirror} }},\n")
+        f.write(
+            f"0x{irisColor:04X}, {irisAngle}, {irisSpin}, {irisMirror} }},\n")
 
         # Sclera
         if scleraDataName:
-            f.write(f"      {{ {{ {scleraDataName}, {scleraDataName}Width, {scleraDataName}Height }}, ")
+            f.write(
+                f"      {{ {{ {scleraDataName}, {scleraDataName}Width, {scleraDataName}Height }}, ")
         else:
             f.write(f"      {{ {{ nullptr, 0, 0 }}, ")
-        f.write(f"0x{scleraColor:04X}, {scleraAngle}, {scleraSpin}, {scleraISpin}, {scleraMirror} }},\n")
+        f.write(
+            f"0x{scleraColor:04X}, {scleraAngle}, {scleraSpin}, {scleraMirror} }},\n")
 
         # Eyelid
-        f.write(f"      {{ {upperName}, {lowerName}, 0x{eyelidColor:04X} }},\n")
+        f.write(
+            f"      {{ {upperName}, {lowerName}, 0x{eyelidColor:04X} }},\n")
 
         # Polar map info - uses shared display-level tables
         f.write(f"      {{ {mapRadius}, {angleName}, {distName} }}\n")
@@ -398,12 +417,14 @@ def generate_display_header_file(outputDir, screenWidth, screenHeight, mapRadius
         f.write(f"// Map radius: {mapRadius}\n\n")
 
         # Polar angle map
-        f.write(f"const uint8_t {angleName}[{mapRadius * mapRadius}] PROGMEM = {{\n")
+        f.write(
+            f"const uint8_t {angleName}[{mapRadius * mapRadius}] PROGMEM = {{\n")
         output_hex_array(f, displayTables["polarAngle"][0])
         f.write("};\n\n")
 
         # Polar distance map
-        f.write(f"const uint8_t {distName}[{mapRadius * mapRadius}] PROGMEM = {{\n")
+        f.write(
+            f"const uint8_t {distName}[{mapRadius * mapRadius}] PROGMEM = {{\n")
         output_hex_array(f, displayTables["polarDist"][0])
         f.write("};\n\n")
 
@@ -435,13 +456,16 @@ def generate_all_eyes(configDir, outputDir, displayType="default"):
     screenHeight = cfg["height"]
     mapRadius = cfg["mapRadius"]
 
-    print(f"Generating for {displayType}: {screenWidth}x{screenHeight}, mapRadius={mapRadius}")
+    print(
+        f"Generating for {displayType}: {screenWidth}x{screenHeight}, mapRadius={mapRadius}")
 
     # Generate display-level tables once
-    displayTables = generate_display_header(outputDir, screenWidth, screenHeight, mapRadius)
+    displayTables = generate_display_header(
+        outputDir, screenWidth, screenHeight, mapRadius)
 
     # Generate display header file with shared tables
-    generate_display_header_file(outputDir, screenWidth, screenHeight, mapRadius, displayTables)
+    generate_display_header_file(
+        outputDir, screenWidth, screenHeight, mapRadius, displayTables)
 
     # Generate per-eye headers
     configPath = Path(configDir)
@@ -466,11 +490,14 @@ if __name__ == "__main__":
 
     outputDir = sys.argv[1]
 
+    # Determine mode and arguments
     if len(sys.argv) >= 3 and sys.argv[2] == "--all":
+        # Generate all eyes in resources/eyes/ directory
         displayType = sys.argv[3] if len(sys.argv) > 3 else "default"
         configDir = Path(__file__).parent
         generate_all_eyes(configDir, outputDir, displayType)
     elif len(sys.argv) >= 3:
+        # Generate single eye
         configFile = sys.argv[2]
         displayType = sys.argv[3] if len(sys.argv) > 3 else "default"
 
@@ -485,46 +512,15 @@ if __name__ == "__main__":
         mapRadius = cfg["mapRadius"]
 
         # Generate display tables for this single eye
-        displayTables = generate_display_header(outputDir, screenWidth, screenHeight, mapRadius)
-        generate_display_header_file(outputDir, screenWidth, screenHeight, mapRadius, displayTables)
+        displayTables = generate_display_header(
+            outputDir, screenWidth, screenHeight, mapRadius)
+        generate_display_header_file(
+            outputDir, screenWidth, screenHeight, mapRadius, displayTables)
 
         with open(configFile) as f:
             config = json.load(f)
 
         generate_eye_header(outputDir, config, screenWidth, screenHeight, mapRadius, displayTables,
-                            configDir=Path(configFile).parent)
-    else:
-        print("Usage: tablegen.py <output_dir> <config.eye> [display_type]")
-        print("       tablegen.py <output_dir> --all [display_type]")
-        sys.exit(1)
-    
-    outputDir = sys.argv[1]
-    
-    # Determine mode and arguments
-    if len(sys.argv) >= 3 and sys.argv[2] == "--all":
-        # Generate all eyes in resources/eyes/ directory
-        displayType = sys.argv[3] if len(sys.argv) > 3 else "default"
-        configDir = Path(__file__).parent
-        generate_all_eyes(configDir, outputDir, displayType)
-    elif len(sys.argv) >= 3:
-        # Generate single eye
-        configFile = sys.argv[2]
-        displayType = sys.argv[3] if len(sys.argv) > 3 else "default"
-        
-        if displayType not in DISPLAY_CONFIGS:
-            print(f"Unknown display type: {displayType}")
-            print(f"Available: {list(DISPLAY_CONFIGS.keys())}")
-            sys.exit(1)
-        
-        cfg = DISPLAY_CONFIGS[displayType]
-        screenWidth = cfg["width"]
-        screenHeight = cfg["height"]
-        mapRadius = cfg["mapRadius"]
-        
-        with open(configFile) as f:
-            config = json.load(f)
-
-        generate_eye_header(outputDir, config, screenWidth, screenHeight, mapRadius,
                             configDir=Path(configFile).parent)
     else:
         print("Usage: tablegen.py <output_dir> <config.eye> [display_type]")

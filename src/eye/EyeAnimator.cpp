@@ -25,9 +25,9 @@ bool EyeAnimator::begin(DisplayHAL* display, const EyeDefinition& eyeDef) {
     
 // Initialize movement system
     m_movement.setBounds(0.6f);
-    m_movement.setRandomDuration(83, 166);
-    m_movement.setSaccadeDelay(2000);  // 2 second delay before resuming idle movement after losing target
-    m_movement.startRandomMove();
+    m_movement.setRandomDuration(250, 500);  // 250-500ms - smoother, slower saccades
+    m_movement.setSaccadeDelay(4000);  // 4 second delay before resuming idle movement
+    m_movement.setRandomMode(true);
     
     // Initialize autonomous iris
     for (int i = 0; i < IRIS_LEVELS; i++) {

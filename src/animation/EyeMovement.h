@@ -62,7 +62,7 @@ private:
     float m_startY = 0.5f;
     float m_targetX = 0.5f;
     float m_targetY = 0.5f;
-    float m_boundsRadius = 0.6f;
+    float m_boundsRadius = 0.5f;
     
     bool m_moving = false;
     bool m_randomMode = true;
@@ -73,7 +73,7 @@ private:
 uint32_t m_minDuration = 250;     // 250ms - smoother movement
     uint32_t m_maxDuration = 500;    // 500ms - natural saccade speed
     
-    uint32_t m_saccadeDelayAfterTrack = 2000;  // Delay before starting random movement after losing target
+    uint32_t m_saccadeDelayAfterTrack = 3000;  // 3 second delay before resuming idle movement
     uint32_t m_lastTrackTime = 0;             // Timestamp of last valid target
     bool m_idle = false;                       // True when waiting for saccade delay after losing target
 };

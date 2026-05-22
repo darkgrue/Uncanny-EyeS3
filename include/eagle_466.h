@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include "eyes.h"
+#include "display_466.h"
 
 // Eye: eagle for 466x466 display
 // Map radius: 233
