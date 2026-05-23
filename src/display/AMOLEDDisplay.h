@@ -11,7 +11,11 @@
 #define AMOLED_DISPLAY_H
 
 #include "common/DisplayHAL.h"
-#include "Arduino_GFX_Library.h"
+#include <Arduino_GFX.h>
+
+// Forward declarations - full includes are in AMOLEDDisplay.cpp
+class Arduino_ESP32QSPI;
+class Arduino_CO5300;
 
 /**
  * @brief Display driver for the LilyGo T-Display S3 AMOLED (CO5300).
@@ -72,7 +76,7 @@ public:
 
 private:
   Arduino_CO5300 *m_gfx = nullptr;
-  Arduino_DataBus *m_qspiBus = nullptr; // Direct QSPI bus for async DMA
+  Arduino_ESP32QSPI *m_qspiBus = nullptr;
   int m_width = 466;
   int m_height = 466;
   bool m_initialized = false;

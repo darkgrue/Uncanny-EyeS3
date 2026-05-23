@@ -15,6 +15,7 @@
 #pragma once
 
 #include "../Arduino_DriveBus.h"
+#include <driver/i2s_std.h>
 
 class Arduino_HWIIS : public Arduino_IIS_DriveBus
 {
@@ -33,4 +34,6 @@ public:
 private:
     i2s_port_t _iis_num;
     int8_t _bclk, _lrck, _data;
+    i2s_chan_handle_t _tx_handle = nullptr;
+    i2s_chan_handle_t _rx_handle = nullptr;
 };

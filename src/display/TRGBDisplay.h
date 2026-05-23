@@ -11,7 +11,14 @@
 #define TRGB_DISPLAY_H
 
 #include "common/DisplayHAL.h"
-#include <Arduino_GFX_Library.h>
+#include <Arduino_GFX.h>
+#include <Wire.h>
+
+// Forward declarations - full includes are in TRGBDisplay.cpp
+// to avoid GFX library dependency for environments that don't use this display
+class Arduino_XL9535SWSPI;
+class Arduino_ESP32RGBPanel;
+class Arduino_RGB_Display;
 
 /**
  * @brief Display driver for the LilyGo T-RGB (ST7701S RGB panel).
@@ -72,7 +79,7 @@ public:
 private:
   Arduino_DataBus *bus = nullptr;
   Arduino_ESP32RGBPanel *rgbpanel = nullptr;
-  Arduino_RGB_Display *gfx = nullptr;
+  Arduino_GFX *gfx = nullptr;
   int m_width = 480;
   int m_height = 480;
   bool m_initialized = false;

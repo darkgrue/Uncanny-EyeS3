@@ -19,7 +19,7 @@ PlatformIO VS Code extension. Do NOT use Arduino IDE, CMake, or other build syst
 ---
 
 ## Dev environment tips
-- When on a Windows environment, use `%USERPROFILE%\.platformio\penv\Scripts\platformio.exe` to invoke PlatformIO, not `pio`.
+- When on a Windows environment, use `%USERPROFILE%\.platformio\penv\Scripts\platformio.exe` in `cmd` or `$HOME\.platformio\penv\Scripts\platformio.exe` in `PowerShell` to invoke PlatformIO, not `pio`.
 
 ## Build & Flash Commands
 
@@ -61,6 +61,14 @@ Run these from the project root (where `platformio.ini` lives).
   - Classes and structs: `PascalCase`
 - Keep files under 500 lines; split large modules into logical units under `src/` or `lib/`
 - Avoid dynamic memory allocation (`new`/`malloc`) on constrained microcontrollers unless justified
+- **Documentation**: All functions **must** have Javadoc-style Doxygen comment blocks. Use `/** */` format with `@brief`, `@param`, and `@return` tags as applicable. Example:
+  ```cpp
+  /**
+   * @brief Initializes the sensor with given configuration.
+   * @param config Pointer to configuration structure.
+   * @return True if initialization succeeded, false otherwise.
+   */
+  bool initializeSensor(const SensorConfig* config);
 
 ---
 

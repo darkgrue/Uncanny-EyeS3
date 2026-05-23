@@ -2,7 +2,7 @@
  * @file WiiChuck.cpp
  * @brief Implementation of Wii Nunchuck controller input.
  *
- * Communication via I2C at 400kHz. The Nunchuck requires initialization
+ * Communication via I2C. The Nunchuck requires initialization
  * sequence: 0xF0/0x55 to enter mode, then 0xFB/0x00 to request raw data.
  * Joystick is decoded from bytes 0-1 (centered at 0x80) and buttons from byte 5.
  */
@@ -18,35 +18,30 @@ WiiChuckInput::WiiChuckInput(uint8_t address)
 /**
  * @brief Initialize I2C communication with the Nunchuck.
  *
- * Starts Wire if not already running, then sends the two-step initialization
- * sequence expected by the Nunchuck protocol. Performs an initial read to
- * confirm the device is responsive.
+ * The I2C bus (Wire) is expected to already be running from a prior
+ * component (SY6970, display, etc.). The Nunchuck supports 100kHz so
+ * no clock change is needed when the bus is already at that speed.
  */
 bool WiiChuckInput::begin()
 {
-  static bool wireStarted = false;
-  if (!wireStarted)
-  {
-    Wire.begin(BOARD_I2C_SDA, BOARD_I2C_SCL);
-    wireStarted = true;
-  }
-  Wire.setClock(400000);
-
-  // Initialize controller
+  // Initialize controller - step 1: enter extended mode
   Wire.beginTransmission(m_address);
   Wire.write(0xF0);
   Wire.write(0x55);
-  if (Wire.endTransmission() != 0)
+  uint8_t ret1 = Wire.endTransmission();
+  if (ret1 != 0)
   {
     return false;
   }
 
   delay(1);
 
+  // Initialize controller - step 2: request raw data mode
   Wire.beginTransmission(m_address);
   Wire.write(0xFB);
   Wire.write(0x00);
-  if (Wire.endTransmission() != 0)
+  uint8_t ret2 = Wire.endTransmission();
+  if (ret2 != 0)
   {
     return false;
   }

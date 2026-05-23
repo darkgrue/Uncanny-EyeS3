@@ -8,6 +8,9 @@
  * PSRAM framebuffer for the fastest bulk update available.
  */
 #include "TRGBDisplay.h"
+#include <databus/Arduino_XL9535SWSPI.h>
+#include <databus/Arduino_ESP32RGBPanel.h>
+#include <display/Arduino_RGB_Display.h>
 
 namespace
 {
@@ -84,7 +87,9 @@ void TRGBDisplay::pushPixels(const uint16_t *pixels, size_t count)
 {
   if (gfx)
   {
-    uint16_t *fb = gfx->getFramebuffer();
+    // Cast to Arduino_RGB_Display to access getFramebuffer()
+    Arduino_RGB_Display *rgbDisplay = static_cast<Arduino_RGB_Display *>(gfx);
+    uint16_t *fb = rgbDisplay->getFramebuffer();
     if (fb)
     {
       memcpy(fb, pixels, count * sizeof(uint16_t));
@@ -188,7 +193,9 @@ void TRGBDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
   if (!gfx || !buffer)
     return;
 
-  uint16_t *fb = gfx->getFramebuffer();
+  // Cast to Arduino_RGB_Display to access getFramebuffer()
+  Arduino_RGB_Display *rgbDisplay = static_cast<Arduino_RGB_Display *>(gfx);
+  uint16_t *fb = rgbDisplay->getFramebuffer();
   if (!fb)
     return;
 

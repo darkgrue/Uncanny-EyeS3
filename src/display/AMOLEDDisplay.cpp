@@ -11,8 +11,11 @@
  */
 #include "AMOLEDDisplay.h"
 #include "BoardPins.h"
+
+// GFX library headers - use subdirectory paths relative to include path .pio/libdeps/amoled/GFX Library for Arduino/src
+#include "databus/Arduino_ESP32QSPI.h"
+#include "display/Arduino_CO5300.h"
 #include "Arduino_TFT.h"
-#include "../lib/Arduino_GFX-1.3.7/src/databus/Arduino_ESP32QSPI.h"
 
 AMOLEDDisplay::AMOLEDDisplay()
     : m_gfx(nullptr), m_qspiBus(nullptr), m_initialized(false), m_transferPending(false)
@@ -39,7 +42,7 @@ bool AMOLEDDisplay::begin()
 
   m_qspiBus = new Arduino_ESP32QSPI(LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
 
-  m_gfx = new Arduino_CO5300(m_qspiBus, LCD_RST, 0, false, LCD_WIDTH, LCD_HEIGHT, 6, 0, 0, 0);
+  m_gfx = new Arduino_CO5300(m_qspiBus, LCD_RST, 0, LCD_WIDTH, LCD_HEIGHT, 6, 0, 0, 0);
 
   if (!m_gfx->begin(SPI_FREQUENCY))
   {
@@ -48,11 +51,11 @@ bool AMOLEDDisplay::begin()
   }
   Serial.println("CO5300 begin() successful.");
 
-  m_gfx->fillScreen(WHITE);
+  m_gfx->fillScreen(RGB565_WHITE);
 
   for (int i = 0; i <= 255; i++)
   {
-    m_gfx->Display_Brightness(i);
+    m_gfx->setBrightness(i);
     delay(3);
   }
 
@@ -180,19 +183,11 @@ bool AMOLEDDisplay::waitForTransferComplete(uint32_t timeoutMs)
   if (!m_transferPending)
     return true;
 
-  Arduino_DataBus *bus = m_gfx->getDataBus();
-  if (!bus)
-    return false;
-
-  Arduino_ESP32QSPI *qspi = (Arduino_ESP32QSPI *)bus;
-
-  if (qspi->waitAllChunks(timeoutMs))
-  {
-    m_transferPending = false;
-    m_gfx->endWrite();
-    return true;
-  }
-  return false;
+  // In v1.6.5, transfers are synchronous/blocking, so no need to wait
+  (void)timeoutMs;
+  m_transferPending = false;
+  m_gfx->endWrite();
+  return true;
 }
 
 /** @brief Wait for an async transfer to complete. */
@@ -269,7 +264,7 @@ void AMOLEDDisplay::setBrightness(uint8_t level)
 {
   if (m_gfx)
   {
-    m_gfx->Display_Brightness(level);
+    m_gfx->setBrightness(level);
   }
 }
 
@@ -330,11 +325,8 @@ void AMOLEDDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
   if (srcH % 2 != 0)
     srcH++;
 
-  Arduino_DataBus *bus = m_gfx->getDataBus();
-  if (!bus)
+  if (!m_qspiBus)
     return;
-
-  Arduino_ESP32QSPI *qspi = (Arduino_ESP32QSPI *)bus;
 
   m_gfx->startWrite();
   m_gfx->writeAddrWindow(destX, destY, srcW, srcH);
@@ -347,7 +339,7 @@ void AMOLEDDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
   if (isContiguous)
   {
     uint16_t *srcPtr = buffer + srcY * m_width;
-    qspi->writeBytes((uint8_t *)srcPtr, totalBytes);
+    m_qspiBus->writeBytes((uint8_t *)srcPtr, totalBytes);
   }
   else
   {
@@ -387,7 +379,7 @@ void AMOLEDDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
       memcpy(copyBuf + row * srcW, srcRow, srcW * sizeof(uint16_t));
     }
 
-    qspi->writeBytes((uint8_t *)copyBuf, totalBytes);
+    m_qspiBus->writeBytes((uint8_t *)copyBuf, totalBytes);
   }
 
   m_gfx->endWrite();
