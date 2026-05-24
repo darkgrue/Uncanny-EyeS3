@@ -82,28 +82,74 @@ void EyeSyncManager::broadcast(const EyeSyncMessage &msg)
 }
 
 /**
- * @brief Track a peer MAC for peer count reporting.
+ * @brief Register or refresh a peer MAC for peer count tracking.
  *
- * Deduplicates against the existing list and records the MAC. No unicast
- * peer registration is needed because broadcast() always sends to the
- * FF:FF:FF:FF:FF:FF address registered in begin(). The peer list is used
- * only for getPeerCount() and getPeerMac().
+ * Refreshes the last-seen timestamp for known peers (called on every received
+ * packet, so this keeps the drop-detection timer alive). Adds new peers up to
+ * the 8-entry limit and logs the first appearance.
  */
 bool EyeSyncManager::addPeer(const uint8_t *mac)
 {
+  uint32_t now = millis();
+
   for (int i = 0; i < m_peerCount; i++)
   {
     if (memcmp(m_peerMACS[i], mac, 6) == 0)
-      return true; // already known
+    {
+      m_peerLastSeen[i] = now;
+      return true;
+    }
   }
 
   if (m_peerCount >= 8)
     return false;
 
-  memcpy(m_peerMACS[m_peerCount++], mac, 6);
+  memcpy(m_peerMACS[m_peerCount], mac, 6);
+  m_peerLastSeen[m_peerCount] = now;
+  m_peerCount++;
   Serial.printf("[EyeSync] New peer: %02X:%02X:%02X:%02X:%02X:%02X (%d total)\n",
                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], m_peerCount);
   return true;
+}
+
+/**
+ * @brief Remove and log peers silent for longer than timeoutMs.
+ *
+ * Uses swap-with-last compaction to avoid shifting the whole array. Resets
+ * hasController() if the dropped peer was the registered controller.
+ */
+void EyeSyncManager::pruneDropped(uint32_t timeoutMs)
+{
+  uint32_t now = millis();
+
+  for (int i = 0; i < m_peerCount; )
+  {
+    if (now - m_peerLastSeen[i] > timeoutMs)
+    {
+      Serial.printf("[EyeSync] Peer dropped: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                    m_peerMACS[i][0], m_peerMACS[i][1], m_peerMACS[i][2],
+                    m_peerMACS[i][3], m_peerMACS[i][4], m_peerMACS[i][5]);
+
+      if (m_hasController && memcmp(m_peerMACS[i], m_controllerMac, 6) == 0)
+      {
+        m_hasController = false;
+        memset(m_controllerMac, 0, 6);
+      }
+
+      // Swap with last entry and shrink — avoids shifting the whole array.
+      m_peerCount--;
+      if (i < m_peerCount)
+      {
+        memcpy(m_peerMACS[i], m_peerMACS[m_peerCount], 6);
+        m_peerLastSeen[i] = m_peerLastSeen[m_peerCount];
+      }
+      // Do not increment i: re-check the swapped-in entry.
+    }
+    else
+    {
+      i++;
+    }
+  }
 }
 
 /** @brief Send a message to a specific peer by MAC address. */

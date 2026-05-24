@@ -594,7 +594,10 @@ void loop()
     if (s_gestureFace)
       Serial.print(" GestureFace");
     if (s_syncManager)
+    {
+      s_syncManager->pruneDropped();
       Serial.printf(" ESP-NOW(%d peers)", s_syncManager->getPeerCount());
+    }
     Serial.println();
   }
 

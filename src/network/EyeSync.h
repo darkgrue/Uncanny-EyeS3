@@ -67,14 +67,24 @@ public:
   bool sendTo(const uint8_t *mac, const EyeSyncMessage &msg);
 
   /**
-   * @brief Register a peer by MAC for peer count tracking.
+   * @brief Register or refresh a peer MAC for peer count tracking.
    *
-   * Deduplicates against the existing list, then calls esp_now_add_peer()
-   * so the peer can receive unicast sends. Used internally by onDataReceived()
-   * to automatically register senders.
+   * Updates the last-seen timestamp for known peers and adds new peers up
+   * to the 8-entry limit. Called internally by onDataReceived().
    * @return true if the peer is known (newly added or already present).
    */
   bool addPeer(const uint8_t *mac);
+
+  /**
+   * @brief Remove and log peers silent for longer than timeoutMs.
+   *
+   * Compacts the peer list when a peer is dropped. If the dropped peer was
+   * the registered controller, hasController() resets to false so followers
+   * immediately fall back to autonomous movement. Call periodically (e.g.
+   * every 5 s from loop()).
+   * @param timeoutMs Silence threshold in milliseconds (default 5000).
+   */
+  void pruneDropped(uint32_t timeoutMs = 5000);
 
   /** @brief Number of active ESP-NOW peers. */
   int getPeerCount() const;
@@ -116,8 +126,9 @@ private:
   OnPeerLeft m_onPeerLeft = nullptr;
   OnDataReceived m_onDataReceived = nullptr;
 
-  uint8_t m_peerMACS[8][6];
-  int m_peerCount = 0;
+  uint8_t  m_peerMACS[8][6];
+  uint32_t m_peerLastSeen[8] = {0};
+  int      m_peerCount = 0;
 };
 
 /**
