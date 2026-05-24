@@ -26,6 +26,8 @@
         "mirror": false
     },
     "eyelid": {
-        "color": 0
+        "color": 0,
+        "normalClosure": 0.20,
+        "wideClosure": 0.0
     }
 }

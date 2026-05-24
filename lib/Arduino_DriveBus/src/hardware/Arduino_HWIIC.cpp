@@ -18,9 +18,15 @@ bool Arduino_HWIIC::begin(int32_t speed)
 {
     _speed = (speed == DRIVEBUS_DEFAULT_VALUE) ? IIC_DEFAULT_SPEED : speed;
 
-    if (_wire->begin(_sda, _scl, _speed) == false)
+    // Skip begin() if Wire is already running (getClock() returns 0 when uninitialized).
+    // This prevents re-initialization when multiple devices share the same bus instance,
+    // which causes ESP_ERR_INVALID_STATE on ESP32's I2C driver.
+    if (_wire->getClock() == 0)
     {
-        return false;
+        if (_wire->begin(_sda, _scl, _speed) == false)
+        {
+            return false;
+        }
     }
     return true;
 }

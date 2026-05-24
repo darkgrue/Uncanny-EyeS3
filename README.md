@@ -108,18 +108,19 @@ resources/eyes/
 
 ### Generating C++ Headers
 
-Run `tablegen.py` after creating or modifying any `.eye` file. It reads the JSON config and any referenced images, computes all lookup tables, and writes a C++ header to `include/eyes/`.
+Run `tablegen.py` to generate C++ header files with precomputed polar maps and displacement maps. These tables are shared across all eyes for a given display size. Header files are placed in `include/display/`.
 
 ```bash
-# Regenerate all eyes for both displays
-python resources/eyes/tablegen.py include/ --all amoled
-python resources/eyes/tablegen.py include/ --all trgb
+# Regenerate for a single display type
+python tablegen.py [display_type]
 
-# Regenerate a single eye
-python resources/eyes/tablegen.py include/ resources/eyes/default_eye/default_eye_466.eye amoled
+# Regenerate all display types
+python tablegen.py -all
 ```
 
-Output headers are named `<eye_name>_466.h` (AMOLED) and `<eye_name>_480.h` (T-RGB).
+`display_type` is `default` (240x240), `amoled` (466x466), or `trgb` (480x480).
+
+Output headers are named `display_240.h` (default), `display_466.h` (AMOLED), and `display_480.h` (T-RGB).
 
 ### `.eye` Config Format
 
@@ -154,23 +155,27 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
         "mirror": false
     },
     "eyelid": {
-        "color": 0
+        "color": 0,
+        "normalClosure": 0.15
     }
 }
 ```
 
-| Field                               | Description                                                        |
-| ----------------------------------- | ------------------------------------------------------------------ |
-| `radiusFraction`                    | Eye radius as fraction of the smaller screen dimension             |
-| `backColor`                         | Background color behind the eye (RGB565)                           |
-| `tracking`                          | Eyelids track pupil vertical position                              |
-| `pupil.slitRadius`                  | `0` = round pupil; `>0` = slit pupil                               |
-| `pupil.minFraction` / `maxFraction` | Pupil size range as fraction of iris radius                        |
-| `iris.radiusFraction`               | Iris radius as fraction of eye radius                              |
-| `iris.spin` / `iSpin`               | Continuous spin / fixed per-frame spin override                    |
-| `iris.filename`                     | Optional PNG/BMP texture (relative path, auto-converted to RGB565) |
-| `sclera.filename`                   | Optional sclera texture                                            |
-| `eyelid.upper` / `lower`            | Optional grayscale lid images (must match display resolution)      |
+| Field                               | Description                                                                        |
+| ----------------------------------- | ---------------------------------------------------------------------------------- |
+| `radiusFraction`                    | Eye radius as fraction of the smaller screen dimension                             |
+| `backColor`                         | Background color behind the eye (RGB565)                                           |
+| `tracking`                          | Eyelids track pupil vertical position                                              |
+| `pupil.slitRadius`                  | `0` = round pupil; `>0` = slit pupil                                               |
+| `pupil.minFraction` / `maxFraction` | Pupil size range as fraction of iris radius                                        |
+| `iris.radiusFraction`               | Iris radius as fraction of eye radius                                              |
+| `iris.spin` / `iSpin`               | Continuous spin / fixed per-frame spin override                                    |
+| `iris.filename`                     | Optional PNG/BMP texture (relative path, auto-converted to RGB565)                 |
+| `sclera.filename`                   | Optional sclera texture                                                            |
+| `eyelid.upperFilename`              | Optional custom lid images (upper, lower; must match display)                      |
+| `eyelid.normalClosure`              | Eyelid coverage fraction at rest (0.0–1.0). Default: `0.0`                         |
+
+`eyelid.normalClosure` sets how much the lids close over the eye in the resting-open position. A value of `0.15` means the lids cover 15 % of the eye radius at rest. `eyesWide()` bypasses this offset and retracts the lids fully to 1.0, making the expression visually distinct from the normal resting gap. The supplied eye definitions use `0.15` (default\_eye), `0.20` (human\_eye), and `0.05` (eagle).
 
 ### Adding a New Eye
 
@@ -179,8 +184,9 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
 2. Generate headers:
 
    ```bash
-   python resources/eyes/tablegen.py include/ resources/eyes/<name>/<name>_466.eye amoled
-   python resources/eyes/tablegen.py include/ resources/eyes/<name>/<name>_480.eye trgb
+   python geneye.py -eye <eye_name>    Generate header for specific eye
+   python geneye.py -all               Generate headers for all eyes
+   python geneye.py -list              List available eyes
    ```
 
 3. Register in `include/EyeLibrary.h` under both board sections:
@@ -223,16 +229,15 @@ I2C address: `0x52`, bus speed: 400 kHz.
 
 ### Controls
 
-| Input               | Behavior                                           |
-| ------------------- | -------------------------------------------------- |
-| Joystick (active)   | Direct eye position; overrides autonomous movement  |
-| Joystick (centered) | Returns to autonomous wandering after 4 s delay    |
-| Z press             | Single blink (edge-triggered)                      |
-| Z hold              | Eyes stay closed                                   |
-| C press             | Boop expression (edge-triggered)                   |
-| C hold              | Eyes go wide                                       |
+| Input               | Behavior                                                       |
+| ------------------- | -------------------------------------------------------------- |
+| Joystick (active)   | Direct eye position; overrides autonomous movement             |
+| Joystick (centered) | Returns to autonomous wandering after current saccade finishes |
+| Z press             | Single blink (edge-triggered)                                  |
+| C hold              | Eyes go wide — eyelids retract beyond the normal resting gap   |
+| C + Z (chord)       | Boop expression (fires when the second button lands)           |
 
-**Priority (highest → lowest):** close > wide > blink > boop
+Buttons work independently of the joystick: you can blink or go wide while the joystick is centred.
 
 Joystick values are raw 0–255 with center at 128. A ±10 dead zone prevents drift. Control returns to autonomous mode when the joystick is centered.
 

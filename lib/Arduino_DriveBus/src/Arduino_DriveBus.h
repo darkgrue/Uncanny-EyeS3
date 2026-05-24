@@ -20,7 +20,7 @@
 #include <memory>
 #include <vector>
 #include <numeric>
-#include <driver/i2s.h>
+#include <hal/i2s_types.h>
 
 #define DRIVEBUS_DEFAULT_VALUE -1
 
@@ -78,7 +78,7 @@ class Arduino_IIS_DriveBus
 public:
     Arduino_IIS_DriveBus();
 
-    virtual bool begin(i2s_mode_t iis_mode, ad_iis_data_mode_t device_state, i2s_channel_fmt_t channel_mode,
+    virtual bool begin(i2s_role_t iis_mode, ad_iis_data_mode_t device_state, i2s_slot_mode_t channel_mode,
                        int8_t bits_per_sample = DRIVEBUS_DEFAULT_VALUE, int32_t sample_rate = DRIVEBUS_DEFAULT_VALUE) = 0;
 
     virtual size_t Read(void *data, size_t bytes) = 0;
@@ -90,9 +90,9 @@ public:
     virtual bool end() = 0;
 
 protected:
-    i2s_mode_t _iis_mode;
+    i2s_role_t _iis_mode;
     ad_iis_data_mode_t _device_state;
-    i2s_channel_fmt_t _channel_mode;
+    i2s_slot_mode_t _channel_mode;
 
     int32_t _sample_rate, _bits_per_sample;
 };

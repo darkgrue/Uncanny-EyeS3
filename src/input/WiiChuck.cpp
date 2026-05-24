@@ -10,69 +10,147 @@
 #include "BoardPins.h"
 #include <Arduino.h>
 
-WiiChuckInput::WiiChuckInput(uint8_t address)
-    : m_address(address)
+/**
+ * @brief Construct a WiiChuckInput with the given I2C address.
+ * @param address I2C address of the Nunchuck peripheral (default 0x52).
+ */
+WiiChuckInput::WiiChuckInput(uint8_t address, TwoWire &wire)
+    : m_wire(wire), m_address(address)
 {
 }
 
 /**
  * @brief Initialize I2C communication with the Nunchuck.
- *
- * The I2C bus (Wire) is expected to already be running from a prior
- * component (SY6970, display, etc.). The Nunchuck supports 100kHz so
- * no clock change is needed when the bus is already at that speed.
+ * @return true if the controller acknowledged the handshake and was identified
+ *         as a NUNCHUCK; false on I2C error or unexpected controller type.
  */
 bool WiiChuckInput::begin()
 {
-  // Initialize controller - step 1: enter extended mode
-  Wire.beginTransmission(m_address);
-  Wire.write(0xF0);
-  Wire.write(0x55);
-  uint8_t ret1 = Wire.endTransmission();
-  if (ret1 != 0)
+  // Request raw (unencrypted) data mode.
+  // START, 0xF0, 0x55, STOPSTART, 0xFB, 0x00, STOP
+  m_wire.beginTransmission(m_address);
+  m_wire.write(0xF0);
+  m_wire.write(0x55);
+  m_wire.endTransmission(true);
+  m_wire.beginTransmission(m_address);
+  m_wire.write(0xFB);
+  m_wire.write(0x00);
+  if (m_wire.endTransmission(true) != 0)
   {
+    Serial.println("[WiiChuckInput] ERROR: Failed to set unencrypted data mode!");
     return false;
   }
 
-  delay(1);
-
-  // Initialize controller - step 2: request raw data mode
-  Wire.beginTransmission(m_address);
-  Wire.write(0xFB);
-  Wire.write(0x00);
-  uint8_t ret2 = Wire.endTransmission();
-  if (ret2 != 0)
-  {
-    return false;
-  }
-
-  delay(1);
-
-  readData();
+  if(identifyController() == NUNCHUCK) {
+  Serial.println("[WiiChuckInput] WiiChuck initialized successfully.");
   return true;
+  }
+  else {
+  Serial.println("[WiiChuckInput] WARNING: Unexpected Chuck type!");
+  return false;
+  }
+}
+
+/**
+ * @brief Probe the 0xFA identification register and classify the controller.
+ * @return The detected ControllerType, or UnknownChuck if the ID bytes do not
+ *         match any known peripheral.
+ */
+ControllerType WiiChuckInput::identifyController()
+{
+  Serial.println("[WiiChuckInput] Reading controller identification bytes...");
+  m_wire.beginTransmission(m_address);
+  m_wire.write(0xFA);
+  if (m_wire.endTransmission(true) != 0)
+  {
+    Serial.println("[WiiChuckInput] ERROR: Failed to request controller ID!");
+    return UnknownChuck;
+  }
+
+  if (m_wire.requestFrom(m_address, (uint8_t)6) < 6)
+  {
+    Serial.println("[WiiChuckInput] ERROR: Failed to read controller ID!");
+    m_wire.endTransmission(true);
+    return UnknownChuck;
+  }
+
+  Serial.print("[WiiChuckInput] Controller ID: ");
+  for (uint8_t i = 0; i < 6; i++)
+  {
+    m_status[i] = m_wire.read();
+    Serial.print(m_status[i], HEX);
+  }
+  Serial.println(".");
+
+  m_wire.endTransmission(true);
+
+  // Nunchuck: bytes 4-5 = 0x00 0x00
+  if (m_status[4] == 0x00 && m_status[5] == 0x00)
+    return NUNCHUCK;
+
+  // Classic Controller: bytes 4-5 = 0x01 0x01
+  if (m_status[4] == 0x01 && m_status[5] == 0x01)
+    return WIICLASSIC;
+
+  // Guitar Hero Controller: [0..3] = 0x00 0x00 0xA4 0x20, [4..5] = 0x01 0x03
+  if (m_status[0] == 0x00 && m_status[1] == 0x00 && m_status[2] == 0xA4 &&
+      m_status[3] == 0x20 && m_status[4] == 0x01 && m_status[5] == 0x03)
+    return GuitarHeroController;
+
+  // Guitar Hero World Tour Drums: [0..3] = 0x01 0x00 0xA4 0x20, [4..5] = 0x01 0x03
+  if (m_status[0] == 0x01 && m_status[1] == 0x00 && m_status[2] == 0xA4 &&
+      m_status[3] == 0x20 && m_status[4] == 0x01 && m_status[5] == 0x03)
+    return GuitarHeroWorldTourDrums;
+
+  // Turntable: [0..3] = 0x03 0x00 0xA4 0x20, [4..5] = 0x01 0x03
+  if (m_status[0] == 0x03 && m_status[1] == 0x00 && m_status[2] == 0xA4 &&
+      m_status[3] == 0x20 && m_status[4] == 0x01 && m_status[5] == 0x03)
+    return Turntable;
+
+  // Taiko no Tatsujin TaTaCon (Drum controller): [0..3] = 0x00 0x00 0xA4 0x20, [4..5] = 0x01 0x11
+  if (m_status[0] == 0x00 && m_status[1] == 0x00 && m_status[2] == 0xA4 &&
+      m_status[3] == 0x20 && m_status[4] == 0x01 && m_status[5] == 0x11)
+    return DrumController;
+
+  // Drawsome Tablet: [0..3] = 0xFF 0x00 0xA4 0x20, [4..5] = 0x00 0x13
+  if (m_status[0] == 0xFF && m_status[1] == 0x00 && m_status[2] == 0xA4 &&
+      m_status[3] == 0x20 && m_status[4] == 0x00 && m_status[5] == 0x13)
+    return DrawsomeTablet;
+
+  return UnknownChuck;
 }
 
 /**
  * @brief Read and decode joystick and button state from Nunchuck.
  *
- * Requests 6 bytes from the device. Byte 0 = joystick X (0x80 = center),
- * byte 1 = joystick Y (0x80 = center), byte 5 = button bits (bit 0 = Z,
- * bit 1 = C, active-low). Joystick values outside the 10-count deadzone
- * set m_hasStick = true to claim exclusive control.
+ * Sends a 0x00 register-request byte to latch a fresh data snapshot, waits
+ * 200µs for the controller to prepare data, then reads 6 bytes. Byte 0 =
+ * joystick X (0x80 = center), byte 1 = joystick Y (0x80 = center), byte 5 =
+ * button bits (bit 0 = Z active-low = close, bit 1 = C active-low = wide).
+ * Joystick values outside the 10-count deadzone set m_hasStick = true.
+ *
+ * The 0x00 write is required by the Nunchuck protocol — omitting it causes
+ * requestFrom() to fail or return stale data.
  */
 void WiiChuckInput::readData()
 {
   int joyX = 0, joyY = 0;
 
-  Wire.requestFrom((uint8_t)m_address, (uint8_t)6);
-  if (Wire.available() >= 6)
+  // Latch a fresh data snapshot before reading.
+  m_wire.beginTransmission(m_address);
+  m_wire.write(0x00);
+  m_wire.endTransmission();
+  delayMicroseconds(200);
+
+  m_wire.requestFrom((uint8_t)m_address, (uint8_t)6);
+  if (m_wire.available() >= 6)
   {
-    m_status[0] = Wire.read();
-    m_status[1] = Wire.read();
-    m_status[2] = Wire.read();
-    m_status[3] = Wire.read();
-    m_status[4] = Wire.read();
-    m_status[5] = Wire.read();
+    m_status[0] = m_wire.read();
+    m_status[1] = m_wire.read();
+    m_status[2] = m_wire.read();
+    m_status[3] = m_wire.read();
+    m_status[4] = m_wire.read();
+    m_status[5] = m_wire.read();
 
     joyX = (int)m_status[0] - 0x80;
     joyY = (int)m_status[1] - 0x80;
@@ -92,24 +170,26 @@ void WiiChuckInput::readData()
     m_hasStick = false;
   }
 
-  if (m_zPressed && !m_lastZPressed)
-  {
-    m_wantsBlink = true;
-  }
-  m_lastZPressed = m_zPressed;
-
-  if (m_cPressed && !m_lastCPressed)
+  // Boop fires when the second button of a C+Z chord lands (either order).
+  // Snapshot prev state before updating, so both flags reference the same frame.
+  bool bothNow = m_cPressed && m_zPressed;
+  bool bothPrev = m_lastCPressed && m_lastZPressed;
+  if (bothNow && !bothPrev)
   {
     m_wantsBoop = true;
   }
   m_lastCPressed = m_cPressed;
+  m_lastZPressed = m_zPressed;
 }
 
 /**
- * @brief Poll the Nunchuck at ~60Hz.
+ * @brief Poll the Nunchuck at ~60 Hz and update internal state.
  *
- * Reads are throttled to prevent bus flooding. Returns true on each
- * actual read so callers know when fresh data is available.
+ * Reads are throttled to prevent I2C bus flooding. The 16.7 ms interval
+ * matches a ~60 Hz poll rate without requiring a dedicated timer.
+ *
+ * @return true if a fresh data packet was read this call; false if the
+ *         16.7 ms throttle period has not yet elapsed.
  */
 bool WiiChuckInput::update()
 {

@@ -5,8 +5,8 @@
 #include "GestureFaceInput.h"
 #include <Arduino.h>
 
-GestureFaceInput::GestureFaceInput(uint8_t addr, uint16_t frameW, uint16_t frameH)
-    : m_sensor(addr), m_frameW(frameW), m_frameH(frameH)
+GestureFaceInput::GestureFaceInput(uint8_t addr, uint16_t frameW, uint16_t frameH, TwoWire *wire)
+    : m_sensor(addr), m_wire(wire), m_addr(addr), m_frameW(frameW), m_frameH(frameH)
 {
 }
 
@@ -20,14 +20,25 @@ GestureFaceInput::GestureFaceInput(uint8_t addr, uint16_t frameW, uint16_t frame
  */
 bool GestureFaceInput::begin()
 {
-  if (!m_sensor.begin(&Wire))
+  // Probe the I2C address before calling m_sensor.begin() to avoid the DFRobot
+  // library unconditionally re-calling Wire.begin() on an already-running bus,
+  // which puts the ESP32 I2C driver into ESP_ERR_INVALID_STATE and generates
+  // spurious error logs even when no sensor is connected.
+  m_wire->beginTransmission(m_addr);
+  if (m_wire->endTransmission() != 0)
   {
-    Serial.println("GestureFace sensor not found (this is normal if not connected).");
+    Serial.println("[GestureFaceInput] Gesture & Face Detection Sensor not found (this is normal if not connected).");
+    return false;
+  }
+
+  if (!m_sensor.begin(m_wire))
+  {
+    Serial.println("[GestureFaceInput] Gesture & Face Detection Sensor not found (this is normal if not connected).");
     return false;
   }
 
   m_connected = true;
-  Serial.println("GestureFace sensor initialized.");
+  Serial.println("[GestureFaceInput] GestureFace sensor initialized.");
   return true;
 }
 

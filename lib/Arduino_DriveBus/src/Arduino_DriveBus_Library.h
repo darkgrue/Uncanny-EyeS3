@@ -38,7 +38,6 @@
 
 #include "./imu_chip/Arduino_LSM6DSL.h"
 
-#include "./rtc_chip/Arduino_PCF8563.h"
 #include "./rtc_chip/Arduino_PCF85063.h"
 
 #include "./haptic_chip/Arduino_AW8624.h"

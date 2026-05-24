@@ -29,8 +29,20 @@
 #include "EyeLibrary.h"
 #include "BoardPins.h"
 #include <Wire.h>
+#include <esp_wifi.h>
+#include "driver/i2c_master.h"
 
 #define CURRENT_EYE default_eye::eye
+
+// #define DEBUG_FPS_ENABLED           // Comment out to suppress FPS diagnostic messages on serial
+// #define PCF85063_DIAGNOSTIC_ENABLED // Comment out to suppress PCF85063 diagnostic status output on serial
+// #define SY6970_DIAGNOSTIC_ENABLED   // Comment out to suppress SY6970 diagnostic status output on serial
+
+#ifdef DEBUG_FPS_ENABLED
+static uint32_t s_frameCount = 0;
+static uint32_t s_fpsTimer = 0;
+static uint32_t s_currentFps = 0;
+#endif
 
 static EyeProjectConfig s_config;
 static EyeAnimator *s_animator = nullptr;
@@ -50,73 +62,48 @@ std::shared_ptr<Arduino_IIC_DriveBus> IIC_Bus = std::make_shared<Arduino_HWIIC>(
 std::unique_ptr<Arduino_IIC> SY6970(new Arduino_SY6970(IIC_Bus, SY6970_DEVICE_ADDRESS,
                                                        DRIVEBUS_DEFAULT_VALUE, DRIVEBUS_DEFAULT_VALUE));
 
-std::unique_ptr<Arduino_IIC> PCF8563(new Arduino_PCF8563(IIC_Bus, PCF8563_DEVICE_ADDRESS,
-                                                         DRIVEBUS_DEFAULT_VALUE, DRIVEBUS_DEFAULT_VALUE));
+std::unique_ptr<Arduino_IIC> PCF85063(new Arduino_PCF85063(IIC_Bus, PCF85063_DEVICE_ADDRESS,
+                                                           DRIVEBUS_DEFAULT_VALUE, DRIVEBUS_DEFAULT_VALUE));
 
 void renderLoopTask(void *param);
 
 /**
- * @brief Switch the active eye definition by index.
+ * @brief Scan for I2C devices connected to the I2C bus (SDA, SCL).
  *
- * Registered as a command handler for the 'E' serial command.
+ * @return void
  */
-void switchEye(int index)
+void debug_I2Cscan()
 {
-  if (s_animator && s_animator->setEyeIndex(index))
-  {
-    Serial.printf("Switched to eye: %s\n", getEyeName(index));
-  }
-}
+  Serial.println("Scanning I2C bus...");
 
-/**
- * @brief Initialize and configure the SY6970 battery fuel gauge.
- *
- * Enables ADC measurement, configures charging thresholds, voltage
- * limits, and current limits for safe Li-Po operation.
- */
-void setupSY6970()
-{
-  if (SY6970->begin() == false)
+  uint8_t nDevices = 0;
+  for (uint8_t address = 8; address < 127; address++)
   {
-    Serial.println("SY6970 initialization fail!");
+    Wire.beginTransmission(address);
+    uint8_t error = Wire.endTransmission(); // Use the return value to see if a device acknowledged the address
+
+    if (error == 0)
+    {
+      Serial.print("  I2C device found at address 0x");
+      if (address < 16)
+        Serial.print("0");
+      Serial.print(address, HEX);
+      Serial.println("!");
+      nDevices++;
+    }
+    else if (error == 4)
+    {
+      Serial.print("  Unknown error at address 0x");
+      if (address < 16)
+        Serial.print("0");
+      Serial.print(address, HEX);
+      Serial.println("!");
+    }
   }
+  if (nDevices == 0)
+    Serial.println("No I2C devices found.");
   else
-  {
-    Serial.println("SY6970 initialization successful.");
-  }
-
-  // Enable ADC measurement function.
-  if (SY6970->IIC_Write_Device_State(SY6970->Arduino_IIC_Power::Device::POWER_DEVICE_ADC_MEASURE, SY6970->Arduino_IIC_Power::Device_State::POWER_DEVICE_ON) == false)
-  {
-    Serial.println("Failure to set SY6970 ADC Measure ON!");
-  }
-  else
-  {
-    Serial.println("Set SY6970 ADC Measure ON successfully.");
-  }
-
-  // Disable watchdog timer feeding function.
-  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_WATCHDOG_TIMER, 0);
-  // Set thermal regulation threshold to 60 degrees.
-  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_THERMAL_REGULATION_THRESHOLD, 60);
-  // Set charging target voltage to 4224mV.
-  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_CHARGING_TARGET_VOLTAGE_LIMIT, 4224);
-  // Set minimum system voltage limit to 3600mV.
-  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_MINIMUM_SYSTEM_VOLTAGE_LIMIT, 3600);
-  // Set OTG voltage to 5062mV.
-  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_OTG_VOLTAGE_LIMIT, 5062);
-  // Set input current limit to 2100mA.
-  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_INPUT_CURRENT_LIMIT, 2100);
-  // Set fast charging current limit to 2112mA.
-  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_FAST_CHARGING_CURRENT_LIMIT, 2112);
-  // Set pre-charge current limit to 192mA.
-  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_PRECHARGE_CHARGING_CURRENT_LIMIT, 192);
-  // Set termination charging current limit to 320mA.
-  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_TERMINATION_CHARGING_CURRENT_LIMIT, 320);
-  // Set OTG current limit to 500mA.
-  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_OTG_CHARGING_LIMIT, 500);
-
-  Serial.println("SY6970 configuration complete.");
+    Serial.printf("Done. Found %u device(s).\n", nDevices);
 }
 
 /**
@@ -152,45 +139,188 @@ void setupDisplay()
   return;
 #endif
 
-  Serial.printf("Display: %dx%d\n", s_config.displayWidth, s_config.displayHeight);
+  Serial.printf("Display (%dx%d) configured successfully.\n", s_config.displayWidth, s_config.displayHeight);
 }
 
 /**
- * @brief Initialize WiiChuck and LightSensor input devices.
+ * @brief Initialize and configure the PCF85063 RTC.
  *
- * Attempts to initialize a Wii Nunchuck on the I2C bus and a
- * photoresistor on LIGHT_PIN. Both are optional (sensor works
- * without a controller, and vice versa).
+ * Enables ADC measurement, configures charging thresholds, voltage
+ * limits, and current limits for safe Li-Po operation.
  */
-void setupInput()
+void setupPCF85063()
 {
-  static WiiChuckInput chuck;
-  if (chuck.begin())
+  if (PCF85063->begin())
   {
-    s_wiiChuck = &chuck;
-    Serial.println("WiiChuck initialized.");
+    Serial.println("PCF85063 initialized successfully.");
   }
   else
   {
-    Serial.println("WiiChuck not found (this is normal if not connected).");
+    Serial.println("ERROR: PCF85063 failed to initialize!");
   }
+
+  // Enable RTC.
+  PCF85063->IIC_Write_Device_State(PCF85063->Arduino_IIC_RTC::Device::RTC_CLOCK_RTC,
+                                   PCF85063->Arduino_IIC_RTC::Device_State::RTC_DEVICE_ON);
+  // Disable RTC.
+  PCF85063->IIC_Write_Device_State(PCF85063->Arduino_IIC_RTC::Device::RTC_CLOCK_RTC,
+                                   PCF85063->Arduino_IIC_RTC::Device_State::RTC_DEVICE_OFF);
+
+#if defined(PCF85063_DIAGNOSTIC_ENABLED)
+  Serial.printf("\n--------------------PCF85063--------------------\n");
+  Serial.printf("IIC_Bus.use_count(): %" PRId32 "\n", (int32_t)IIC_Bus.use_count());
+  Serial.printf("ID: 0x%" PRIx32 "\n", (int32_t)PCF85063->IIC_Device_ID());
+
+  Serial.printf("\nPCF85063  Weekday: %s\n",
+                PCF85063->IIC_Read_Device_State(PCF85063->Arduino_IIC_RTC::Status_Information::RTC_WEEKDAYS_DATA).c_str());
+  Serial.printf("PCF85063  Year: %" PRId32 "\n",
+                (int32_t)PCF85063->IIC_Read_Device_Value(PCF85063->Arduino_IIC_RTC::Value_Information::RTC_YEARS_DATA));
+  Serial.printf("PCF85063 Date: %" PRId32 ".%" PRId32 "\n",
+                (int32_t)PCF85063->IIC_Read_Device_Value(PCF85063->Arduino_IIC_RTC::Value_Information::RTC_MONTHS_DATA),
+                (int32_t)PCF85063->IIC_Read_Device_Value(PCF85063->Arduino_IIC_RTC::Value_Information::RTC_DAYS_DATA));
+  Serial.printf("PCF85063 Time: %" PRId32 ":%" PRId32 ":%" PRId32 "\n",
+                (int32_t)PCF85063->IIC_Read_Device_Value(PCF85063->Arduino_IIC_RTC::Value_Information::RTC_HOURS_DATA),
+                (int32_t)PCF85063->IIC_Read_Device_Value(PCF85063->Arduino_IIC_RTC::Value_Information::RTC_MINUTES_DATA),
+                (int32_t)PCF85063->IIC_Read_Device_Value(PCF85063->Arduino_IIC_RTC::Value_Information::RTC_SECONDS_DATA));
+  Serial.printf("--------------------PCF85063--------------------\n\n");
+#endif
+}
+
+/**
+ * @brief Initialize and configure the SY6970 battery fuel gauge.
+ *
+ * Enables ADC measurement, configures charging thresholds, voltage
+ * limits, and current limits for safe Li-Po operation.
+ */
+void setupSY6970()
+{
+  if (SY6970->begin())
+  {
+    Serial.println("SY6970 initialized successfully.");
+  }
+  else
+  {
+    Serial.println("ERROR: SY6970 failed to initialize!");
+  }
+
+  // Enable ADC measurement function.
+  SY6970->IIC_Write_Device_State(SY6970->Arduino_IIC_Power::Device::POWER_DEVICE_ADC_MEASURE, SY6970->Arduino_IIC_Power::Device_State::POWER_DEVICE_ON);
+  // Disable watchdog timer feeding function.
+  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_WATCHDOG_TIMER, 0);
+  // Set thermal regulation threshold to 60 degrees.
+  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_THERMAL_REGULATION_THRESHOLD, 60);
+  // Set charging target voltage to 4224mV.
+  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_CHARGING_TARGET_VOLTAGE_LIMIT, 4224);
+  // Set minimum system voltage limit to 3600mV.
+  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_MINIMUM_SYSTEM_VOLTAGE_LIMIT, 3600);
+  // Set OTG voltage to 5062mV.
+  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_OTG_VOLTAGE_LIMIT, 5062);
+  // Set input current limit to 2100mA.
+  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_INPUT_CURRENT_LIMIT, 2100);
+  // Set fast charging current limit to 2112mA.
+  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_FAST_CHARGING_CURRENT_LIMIT, 2112);
+  // Set pre-charge current limit to 192mA.
+  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_PRECHARGE_CHARGING_CURRENT_LIMIT, 192);
+  // Set termination charging current limit to 320mA.
+  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_TERMINATION_CHARGING_CURRENT_LIMIT, 320);
+  // Set OTG current limit to 500mA.
+  SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_OTG_CHARGING_LIMIT, 500);
+
+#if defined(SY6970_DIAGNOSTIC_ENABLED)
+  Serial.printf("\n--------------------SY6970--------------------\n");
+  Serial.printf("IIC_Bus.use_count(): %" PRId32 "\n", (int32_t)IIC_Bus.use_count());
+  Serial.printf("IIC device ID: 0x%" PRIx32 "\n", (int32_t)SY6970->IIC_Device_ID());
+
+  Serial.printf("\nBUS Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_BUS_STATUS)).c_str());
+  Serial.printf("BUS Connection Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_BUS_CONNECTION_STATUS)).c_str());
+  Serial.printf("Charging Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_CHARGING_STATUS)).c_str());
+  Serial.printf("Input Source Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_INPUT_SOURCE_STATUS)).c_str());
+  Serial.printf("Input USB Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_INPUT_USB_STATUS)).c_str());
+  Serial.printf("System Voltage Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_SYSTEM_VOLTAGE_STATUS)).c_str());
+  Serial.printf("Thermal Regulation Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_THERMAL_REGULATION_STATUS)).c_str());
+
+  Serial.printf("\nWatchdog Fault Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_WATCHDOG_FAULT_STATUS)).c_str());
+  Serial.printf("OTG Fault Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_OTG_FAULT_STATUS)).c_str());
+  Serial.printf("Charging Fault Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_CHARGING_FAULT_STATUS)).c_str());
+  Serial.printf("Battery Fault Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_BATTERY_FAULT_STATUS)).c_str());
+  Serial.printf("NTC Fault Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_NTC_FAULT_STATUS)).c_str());
+
+  Serial.printf("\nInput Voltage: %" PRId32 " mV\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_INPUT_VOLTAGE));
+  Serial.printf("Battery Voltage: %" PRId32 " mV\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_BATTERY_VOLTAGE));
+  Serial.printf("System Voltage: %" PRId32 " mV\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_SYSTEM_VOLTAGE));
+  Serial.printf("NTC Voltage Percentage: %.03f %%\n",
+                (float)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_NTC_VOLTAGE_PERCENTAGE) / 1000.0);
+  Serial.printf("Charging Current: %" PRId32 " mA\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_CHARGING_CURRENT));
+  Serial.printf("Thermal Regulation Threshold: %" PRId32 " °C\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_THERMAL_REGULATION_THRESHOLD));
+
+  Serial.printf("\nCharging Voltage Limit: %" PRId32 " mV\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_CHARGING_TARGET_VOLTAGE_LIMIT));
+  Serial.printf("Minimum System Voltage Limit: %" PRId32 " mV\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_MINIMUM_SYSTEM_VOLTAGE_LIMIT));
+  Serial.printf("OTG Voltage Limit: %" PRId32 " mV\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_OTG_VOLTAGE_LIMIT));
+  Serial.printf("Input Current Limit: %" PRId32 " mA\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_INPUT_CURRENT_LIMIT));
+  Serial.printf("Fast Charge Current Limit: %" PRId32 " mA\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_FAST_CHARGING_CURRENT_LIMIT));
+  Serial.printf("Precharge Charge Current Limit: %" PRId32 " mA\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_PRECHARGE_CHARGING_CURRENT_LIMIT));
+  Serial.printf("Termination Charge Current Limit: %" PRId32 " mA\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_TERMINATION_CHARGING_CURRENT_LIMIT));
+  Serial.printf("OTG Current Limit: %" PRId32 " mA\n",
+                (int32_t)SY6970->IIC_Read_Device_Value(SY6970->Arduino_IIC_Power::Value_Information::POWER_OTG_CURRENT_LIMIT));
+  Serial.printf("--------------------SY6970--------------------\n\n");
+#endif
+
+  Serial.println("SY6970 configuration complete.");
+}
+
+/**
+ * @brief Initialize WiiChuck, LightSensor, and DFRobot Gesture & Face Detection sensor input devices.
+ *
+ * Attempts to initialize a Wii Nunchuck and DFRobot Gesture
+ * & Face Detection sensor on the I2C bus and a photoresistor
+ * on LIGHT_PIN. Both are optional (sensor works without a
+ * controller, and vice versa).
+ */
+void setupInput()
+{
+#if defined(QWIIC_SDA) && defined(QWIIC_SCL)
+  static WiiChuckInput chuck(0x52, Wire1);
+  static GestureFaceInput gfd(0x72, 320, 240, &Wire1);
+#else
+  static WiiChuckInput chuck;
+  static GestureFaceInput gfd;
+#endif
 
   static LightSensor lightSensor(LIGHT_PIN);
   if (lightSensor.begin())
   {
     s_lightSensor = &lightSensor;
   }
-}
 
-/**
- * @brief Initialize the DFRobot Gesture & Face Detection sensor.
- *
- * Optional peripheral — prints a diagnostic message and sets s_gestureFace
- * if found. The sensor shares the I2C bus with the WiiChuck.
- */
-void setupGestureFace()
-{
-  static GestureFaceInput gfd;
+  if (chuck.begin())
+  {
+    s_wiiChuck = &chuck;
+  }
+
   if (gfd.begin())
   {
     s_gestureFace = &gfd;
@@ -245,11 +375,14 @@ void setupNetwork()
                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
             sync.setControllerMac(mac); });
 
-    Serial.printf("ESP-NOW initialized (MAC: %s).\n", WiFi.macAddress().c_str());
+    uint8_t mac[6];
+    esp_wifi_get_mac(WIFI_IF_STA, mac);
+    Serial.printf("ESP-NOW initialized (MAC: %02X:%02X:%02X:%02X:%02X:%02X).\n",
+                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   }
   else
   {
-    Serial.println("ESP-NOW init failed!");
+    Serial.println("ERROR: ESP-NOW init failed!");
   }
 
   static EyeInterpolator interp;
@@ -282,19 +415,36 @@ void setup()
 #endif
   Serial.println("===========================================");
 
-  setupSY6970();
+  // Use 100 kHz as a safe middle ground that works for all devices
+  // on the shared I2C bus.
+  if (Wire.begin(IIC_SDA, IIC_SCL, 100000))
+  {
+    Serial.println("Wire (I2C) initialized successfully.");
+    debug_I2Cscan();
+  }
+  else
+  {
+    Serial.println("ERROR: Wire (I2C) failed to initialize!");
+  }
 
-  setupDisplay();
-
-#ifdef DEBUG_OVERLAY_ENABLED
-  s_debugOverlay.begin(s_display);
-  s_debugOverlay.setEnabled(true);
-  s_debugOverlay.setBatteryPin(4, 0, 4095);
+#if defined(QWIIC_SDA) && defined(QWIIC_SCL)
+  if (Wire1.begin(QWIIC_SDA, QWIIC_SCL, 100000))
+  {
+    Serial.println("Wire1 (QWIIC) initialized successfully.");
+  }
+  else
+  {
+    Serial.println("ERROR: Wire1 (QWIIC) failed to initialize!");
+  }
 #endif
+
+  setupPCF85063();
+
+  setupSY6970();
 
   setupInput();
 
-  setupGestureFace();
+  setupDisplay();
 
   setupNetwork();
 
@@ -322,6 +472,12 @@ void setup()
 
   s_animator->setPupilRange(0.45f, 0.8f);
 
+#ifdef DEBUG_OVERLAY_ENABLED
+  s_debugOverlay.begin(s_display);
+  s_debugOverlay.setEnabled(true);
+  s_debugOverlay.setBatteryPin(4, 0, 4095);
+#endif
+
   Serial.println("\nInitialization complete!\n");
 
   xTaskCreatePinnedToCore(renderLoopTask, "EyeTask", 8192, NULL, 1, NULL, 1);
@@ -341,10 +497,11 @@ void renderLoopTask(void *param)
   uint32_t lastFrame = 0;
   const uint32_t frameInterval = 8333; // ~120 FPS for smoother animation
 
-  // FPS measurement
-  uint32_t frameCount = 0;
-  uint32_t fpsTimer = millis();
-  uint32_t currentFps = 0;
+#ifdef DEBUG_FPS_ENABLED
+  s_frameCount = 0;
+  s_fpsTimer = millis();
+  s_currentFps = 0;
+#endif
 
   while (true)
   {
@@ -354,15 +511,16 @@ void renderLoopTask(void *param)
     {
       lastFrame = now;
 
-      // Measure actual FPS
-      frameCount++;
-      if (millis() - fpsTimer >= 1000)
+#ifdef DEBUG_FPS_ENABLED
+      s_frameCount++;
+      if (millis() - s_fpsTimer >= 1000)
       {
-        currentFps = frameCount;
-        frameCount = 0;
-        fpsTimer = millis();
-        Serial.printf("[FPS] %u\n", currentFps);
+        s_currentFps = s_frameCount;
+        s_frameCount = 0;
+        s_fpsTimer = millis();
+        Serial.printf("[FPS] %" PRIu32 "\n", s_currentFps);
       }
+#endif
 
 #ifdef DEBUG_OVERLAY_ENABLED
       s_debugOverlay.update();
@@ -398,6 +556,19 @@ void renderLoopTask(void *param)
     }
 
     vTaskDelay(1);
+  }
+}
+
+/**
+ * @brief Switch the active eye definition by index.
+ *
+ * Registered as a command handler for the 'E' serial command.
+ */
+void switchEye(int index)
+{
+  if (s_animator && s_animator->setEyeIndex(index))
+  {
+    Serial.printf("Switched to eye: %s\n", getEyeName(index));
   }
 }
 

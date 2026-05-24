@@ -28,7 +28,7 @@ public:
 
     Arduino_IIS(std::shared_ptr<Arduino_IIS_DriveBus> bus);
 
-    virtual bool begin(i2s_mode_t iis_mode, ad_iis_data_mode_t device_state, i2s_channel_fmt_t channel_mode,
+    virtual bool begin(i2s_role_t iis_mode, ad_iis_data_mode_t device_state, i2s_slot_mode_t channel_mode,
                        int8_t bits_per_sample = DRIVEBUS_DEFAULT_VALUE, int32_t sample_rate = DRIVEBUS_DEFAULT_VALUE);
 
     virtual bool IIS_Read_Data(void *data, size_t bytes);

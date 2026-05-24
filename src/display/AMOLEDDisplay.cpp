@@ -44,7 +44,7 @@ bool AMOLEDDisplay::begin()
 
   m_gfx = new Arduino_CO5300(m_qspiBus, LCD_RST, 0, LCD_WIDTH, LCD_HEIGHT, 6, 0, 0, 0);
 
-  if (!m_gfx->begin(SPI_FREQUENCY))
+  if (!m_gfx->begin(QSPI_FREQUENCY))
   {
     Serial.println("ERROR: CO5300 begin() failed!");
     return false;

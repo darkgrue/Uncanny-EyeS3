@@ -12,28 +12,59 @@
 #include "InputBase.h"
 #include <Wire.h>
 
+/** @brief Identifies the type of Wii Extension Controller attached via I2C. */
+typedef enum _controllertype {
+	UnknownChuck,              /**< Controller type could not be determined. */
+	NUNCHUCK,                  /**< Standard Wii Nunchuck. */
+	WIICLASSIC,                /**< Wii Classic Controller. */
+	GuitarHeroController,      /**< Guitar Hero Controller. */
+	GuitarHeroWorldTourDrums,  /**< Guitar Hero World Tour drum kit. */
+	DrumController,            /**< Taiko no Tatsujin TaTaCon drum controller. */
+	DrawsomeTablet,            /**< Drawsome drawing tablet. */
+	Turntable                  /**< DJ Hero turntable controller. */
+} ControllerType;
+
 /**
  * @brief Wii Nunchuck controller input source.
  *
  * Reads joystick position (X/Y) for eye targeting and C/Z buttons for expressions:
  * - Joystick: Direct eye position when active (hasExclusiveControl when tilted > deadzone)
- * - C button (hold): Eyes go wide
- * - Z button (press): Single blink
- * - C + Z simultaneously: Boop expression
+ * - Z button (hold): Eyes close; releases when Z is released
+ * - C button (hold): Eyes go wide; releases when C is released
+ * - C + Z simultaneously: Boop expression (C wins wide vs close priority)
  */
 class WiiChuckInput : public InputBase
 {
 public:
   /**
-   * @brief Construct a WiiChuckInput with the specified I2C address.
+   * @brief Construct a WiiChuckInput with the specified I2C address and bus.
    * @param address I2C address of the Nunchuck (default 0x52).
+   * @param wire    I2C bus instance to use (default Wire).
    */
-  explicit WiiChuckInput(uint8_t address = 0x52);
+  explicit WiiChuckInput(uint8_t address = 0x52, TwoWire &wire = Wire);
 
+  /**
+   * @brief Initialize I2C bus and send the Nunchuck handshake sequence.
+   * @return true if the controller responded and was identified as a NUNCHUCK.
+   */
   bool begin() override;
+
+  /**
+   * @brief Poll the Nunchuck at ~60 Hz and update internal state.
+   * @return true on each frame that fresh data was read from the controller.
+   */
   bool update() override;
 
+  /**
+   * @brief Returns the normalized joystick X position.
+   * @return Value in [-1.0, +1.0]; 0.0 when inside the deadzone.
+   */
   float getTargetX() const override { return m_targetX; }
+
+  /**
+   * @brief Returns the normalized joystick Y position.
+   * @return Value in [-1.0, +1.0]; 0.0 when inside the deadzone.
+   */
   float getTargetY() const override { return m_targetY; }
 
   /**
@@ -44,16 +75,16 @@ public:
    */
   bool hasExclusiveControl() const override { return m_hasStick; }
 
-  /** @brief Returns true on the frame the Z button is first pressed. */
-  bool wantsBlink() const override { return m_wantsBlink; }
+  /** @brief Always false — blink is automatic; no button triggers it. */
+  bool wantsBlink() const override { return false; }
 
-  /** @brief Returns true on the frame the C button is first pressed. */
+  /** @brief Returns true on the frame the C+Z chord first fires. */
   bool wantsBoop() const override { return m_wantsBoop; }
 
-  /** @brief Returns true while the Z button is held down. */
+  /** @brief Returns true while Z is held (eyes closed, released when Z released). */
   bool wantsClose() const override { return m_zPressed; }
 
-  /** @brief Returns true while the C button is held down. */
+  /** @brief Returns true while C is held (eyes wide, released when C released). */
   bool wantsWide() const override { return m_cPressed; }
 
   /** @brief Clear the blink flag after consuming the event. */
@@ -63,9 +94,13 @@ public:
   void clearBoopFlag() override { m_wantsBoop = false; }
 
 private:
+  /** @brief Probe the controller type via the 0xFA identification register. */
+  ControllerType identifyController();
+
   /** @brief Read 6 bytes from the Nunchuck and decode joystick/buttons. */
   void readData();
 
+  TwoWire &m_wire;           /**< I2C bus instance. */
   uint8_t m_address;         /**< I2C address (default 0x52). */
   float m_targetX = 0.0f;    /**< Normalized joystick X (-1.0 to +1.0). */
   float m_targetY = 0.0f;    /**< Normalized joystick Y (-1.0 to +1.0). */

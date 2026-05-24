@@ -44,7 +44,7 @@ int32_t Arduino_SY6970::IIC_Device_ID(void)
     uint8_t temp_buf = 0;
     if (_bus->IIC_ReadC8D8(_device_address, SY6970_RD_DEVICE_14, &temp_buf) == true)
     {
-        return (int32_t)temp_buf;
+        return (int32_t)(temp_buf & 0x03);
     }
     return -1;
 }

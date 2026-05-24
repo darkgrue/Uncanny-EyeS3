@@ -138,7 +138,7 @@ namespace eagle {
       { 0, 0, 0.35, 1.67 },
       { 0.5, { nullptr, 0, 0 }, 65281, 0, 0, 0, 0 },
       { { nullptr, 0, 0 }, 65535, 0, 0, 0, 0 },
-      { upper, lower, 0 },
+      { upper, lower, 0, 0.0500f, 0.0000f },
       { 240, nullptr, nullptr }
   };
 }  // namespace

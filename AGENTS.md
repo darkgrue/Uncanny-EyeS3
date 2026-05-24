@@ -18,12 +18,12 @@ PlatformIO VS Code extension. Do NOT use Arduino IDE, CMake, or other build syst
 
 ---
 
-## Dev environment tips
-- When on a Windows environment, use `%USERPROFILE%\.platformio\penv\Scripts\platformio.exe` in `cmd` or `$HOME\.platformio\penv\Scripts\platformio.exe` in `PowerShell` to invoke PlatformIO, not `pio`.
-
 ## Build & Flash Commands
 
-Always use PlatformIO CLI commands, not raw compiler/linker calls:
+- When on a Windows environment and using a `cmd` shell, use `%USERPROFILE%\.platformio\penv\Scripts\platformio.exe` to invoke PlatformIO, not `pio`
+- When on a Windows environment and using a `PowerShell` shell, use  `$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe` to invoke PlatformIO, not `pio`
+
+- Always use PlatformIO CLI commands, not raw compiler/linker calls, e.g.:
 ```
 pio run                        # Build the project
 pio run --target upload        # Build and flash to device
@@ -32,7 +32,7 @@ pio device monitor             # Open serial monitor
 pio run --target uploadfs      # Upload filesystem image (if used)
 ```
 
-Run these from the project root (where `platformio.ini` lives).
+- Run PlatformIO CLI commands from the project root (where `platformio.ini` lives).
 
 ---
 

@@ -15,7 +15,7 @@ Arduino_Amplifier::Arduino_Amplifier(std::shared_ptr<Arduino_IIS_DriveBus> bus)
 {
 }
 
-bool Arduino_Amplifier::begin(i2s_mode_t iis_mode, ad_iis_data_mode_t device_state, i2s_channel_fmt_t channel_mode,
+bool Arduino_Amplifier::begin(i2s_role_t iis_mode, ad_iis_data_mode_t device_state, i2s_slot_mode_t channel_mode,
                               int8_t bits_per_sample, int32_t sample_rate)
 {
     return Arduino_IIS::begin(iis_mode, device_state, channel_mode, bits_per_sample, sample_rate);

@@ -14,7 +14,7 @@ Arduino_IIS::Arduino_IIS(std::shared_ptr<Arduino_IIS_DriveBus> bus)
 {
 }
 
-bool Arduino_IIS::begin(i2s_mode_t iis_mode, ad_iis_data_mode_t device_state, i2s_channel_fmt_t channel_mode,
+bool Arduino_IIS::begin(i2s_role_t iis_mode, ad_iis_data_mode_t device_state, i2s_slot_mode_t channel_mode,
                         int8_t bits_per_sample, int32_t sample_rate)
 {
     if (_bus->begin(iis_mode, device_state, channel_mode, bits_per_sample, sample_rate) == false)

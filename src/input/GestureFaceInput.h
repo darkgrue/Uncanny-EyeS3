@@ -30,13 +30,14 @@ class GestureFaceInput : public InputBase
 {
 public:
   /**
-   * @brief Construct with I2C address and camera frame dimensions.
+   * @brief Construct with I2C address, camera frame dimensions, and bus.
    *
    * @param addr    I2C device address (default 0x72).
    * @param frameW  Camera frame width in pixels used for coordinate normalization (default 320).
    * @param frameH  Camera frame height in pixels used for coordinate normalization (default 240).
+   * @param wire    I2C bus instance to use (default Wire).
    */
-  explicit GestureFaceInput(uint8_t addr = 0x72, uint16_t frameW = 320, uint16_t frameH = 240);
+  explicit GestureFaceInput(uint8_t addr = 0x72, uint16_t frameW = 320, uint16_t frameH = 240, TwoWire *wire = &Wire);
 
   /**
    * @brief Initialize the sensor on the Wire bus.
@@ -99,6 +100,8 @@ public:
 
 private:
   DFRobot_GestureFaceDetection_I2C m_sensor; // Underlying driver
+  TwoWire *m_wire;                           // I2C bus instance
+  uint8_t m_addr;                            // I2C address used for pre-probe
   float m_targetX = 0.0f;                    // Normalized gaze X (-1..+1)
   float m_targetY = 0.0f;                    // Normalized gaze Y (-1..+1)
   bool m_hasFace = false;                    // True when a face is actively tracked

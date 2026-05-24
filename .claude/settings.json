@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(pio run *)",
+      "PowerShell(cd \"c:\\\\Users\\\\darkg\\\\Documents\\\\GitHub\\\\Uncanny-EyeS3\"; $env:PATH += \";$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\"; pio run -e amoled 2>&1 | Select-Object -Last 30)",
+      "PowerShell(cd \"c:\\\\Users\\\\darkg\\\\Documents\\\\GitHub\\\\Uncanny-EyeS3\"; $env:PATH += \";$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\"; pio run -e amoled 2>&1 | Select-Object -Last 10)"
+    ]
+  },
+  "enabledPlugins": {
+    "claude-md-management@claude-plugins-official": true
+  }
+}

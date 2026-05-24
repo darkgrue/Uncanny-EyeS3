@@ -3,8 +3,7 @@
  * @brief Board-specific pin definitions and I2C bus configuration.
  *
  * Maps the shared peripheral signals to the correct GPIO numbers for each
- * supported board (T-Display S3 AMOLED vs T-RGB). WiiChuck and other I2C
- * peripherals use BOARD_I2C_SDA / BOARD_I2C_SCL which differ between boards.
+ * supported board (T-Display S3 AMOLED vs T-RGB).
  */
 #ifndef BOARD_PINS_H
 #define BOARD_PINS_H
@@ -25,7 +24,7 @@
 #define LCD_CS 10
 #define LCD_RST 17
 #define LCD_EN 16
-#define SPI_FREQUENCY 80000000
+#define QSPI_FREQUENCY 80000000
 #elif defined(ARDUINO_LILYGO_T_RGB)
 #define BOARD_NAME "T-RGB"
 #define LCD_WIDTH 466
@@ -38,7 +37,7 @@
 #define LCD_CS 10
 #define LCD_RST 17
 #define LCD_EN 16
-#define SPI_FREQUENCY 80000000
+#define QSPI_FREQUENCY 80000000
 #else
 #define BOARD_NAME "Unknown"
 #define LCD_WIDTH 466
@@ -47,24 +46,25 @@
 
 // I2C Bus Configuration
 #if defined(ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED)
-#define BOARD_I2C_SDA 7
-#define BOARD_I2C_SCL 6
+#define IIC_SDA 7
+#define IIC_SCL 6
+#define QWIIC_SDA 43
+#define QWIIC_SCL 44
 #elif defined(ARDUINO_LILYGO_T_RGB)
-#define BOARD_I2C_SDA 48
-#define BOARD_I2C_SCL 8
+#define IIC_SDA 48
+#define IIC_SCL 8
+#define QWIIC_SDA 43
+#define QWIIC_SCL 44
 #else
-#define BOARD_I2C_SDA 21
-#define BOARD_I2C_SCL 22
+#define IIC_SDA 21
+#define IIC_SCL 22
 #endif
-
-#define IIC_SDA BOARD_I2C_SDA
-#define IIC_SCL BOARD_I2C_SCL
 
 // Light Sensor
 #define LIGHT_PIN 5
 
 // RTC
-#define PCF8563_INT 9
+#define PCF85063_INT 9
 
 // SD Card
 #define SD_CS 38

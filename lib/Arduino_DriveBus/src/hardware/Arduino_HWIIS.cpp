@@ -14,7 +14,7 @@ Arduino_HWIIS::Arduino_HWIIS(i2s_port_t iis_num, int8_t bclk, int8_t lrck, int8_
 {
 }
 
-bool Arduino_HWIIS::begin(i2s_mode_t iis_mode, ad_iis_data_mode_t device_state, i2s_channel_fmt_t channel_mode,
+bool Arduino_HWIIS::begin(i2s_role_t iis_mode, ad_iis_data_mode_t device_state, i2s_slot_mode_t channel_mode,
                           int8_t bits_per_sample, int32_t sample_rate)
 {
     _iis_mode = iis_mode;
@@ -23,7 +23,7 @@ bool Arduino_HWIIS::begin(i2s_mode_t iis_mode, ad_iis_data_mode_t device_state, 
     _bits_per_sample = (bits_per_sample == DRIVEBUS_DEFAULT_VALUE) ? 16 : bits_per_sample;
     _sample_rate = (sample_rate == DRIVEBUS_DEFAULT_VALUE) ? 44100U : sample_rate;
 
-    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(_iis_num, I2S_ROLE_MASTER);
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(_iis_num, _iis_mode);
     chan_cfg.dma_desc_num = 8;
     chan_cfg.dma_frame_num = 1024;
 
@@ -43,11 +43,10 @@ bool Arduino_HWIIS::begin(i2s_mode_t iis_mode, ad_iis_data_mode_t device_state, 
             .invert_flags = {.mclk_inv = false, .bclk_inv = false, .ws_inv = false},
         };
 
-        i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(_sample_rate);
+        i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)_sample_rate);
         clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_768;
 
-        i2s_std_slot_config_t slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG((i2s_data_bit_width_t)_bits_per_sample, I2S_SLOT_MODE_STEREO);
-        (void)channel_mode;
+        i2s_std_slot_config_t slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG((i2s_data_bit_width_t)_bits_per_sample, _channel_mode);
 
         i2s_std_config_t std_cfg = {
             .clk_cfg = clk_cfg,
@@ -83,11 +82,10 @@ bool Arduino_HWIIS::begin(i2s_mode_t iis_mode, ad_iis_data_mode_t device_state, 
             .invert_flags = {.mclk_inv = false, .bclk_inv = false, .ws_inv = false},
         };
 
-        i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(_sample_rate);
+        i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)_sample_rate);
         clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_768;
 
-        i2s_std_slot_config_t slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG((i2s_data_bit_width_t)_bits_per_sample, I2S_SLOT_MODE_STEREO);
-        (void)channel_mode;
+        i2s_std_slot_config_t slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG((i2s_data_bit_width_t)_bits_per_sample, _channel_mode);
 
         i2s_std_config_t std_cfg = {
             .clk_cfg = clk_cfg,

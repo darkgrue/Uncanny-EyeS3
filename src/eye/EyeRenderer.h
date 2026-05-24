@@ -48,12 +48,12 @@ public:
    * @param pupilFactor Pupil constriction (0.0 dilated, 1.0 constricted).
    * @param upperLidFactor Upper eyelid position (0.0 = closed, 1.0 = open).
    * @param lowerLidFactor Lower eyelid position (0.0 = closed, 1.0 = open).
-   * @param blinkFactor Overall blink (0.0 = no blink, 1.0 = full blink).
+   * @param eyelidGap Eyelid open fraction (0.0 = fully closed, 1.0 = fully retracted).
    * @param irisAngle Iris rotation in degrees.
    * @param scleraAngle Sclera rotation in degrees.
    */
   void renderColumn(int x, float eyeX, float eyeY, float pupilFactor,
-                    float upperLidFactor, float lowerLidFactor, float blinkFactor,
+                    float upperLidFactor, float lowerLidFactor, float eyelidGap,
                     uint16_t irisAngle, uint16_t scleraAngle);
 
   /**
@@ -63,7 +63,7 @@ public:
    * draws the new eye, and flips the buffer swap flag.
    */
   void renderFrame(float eyeX, float eyeY, float pupilFactor,
-                   float upperLidFactor, float lowerLidFactor, float blinkFactor,
+                   float upperLidFactor, float lowerLidFactor, float eyelidGap,
                    uint16_t irisAngle, uint16_t scleraAngle);
 
   /**
@@ -72,7 +72,7 @@ public:
    * Renders one column at a time to improve DMA transfer efficiency.
    */
   void renderFrameUsingColumns(float eyeX, float eyeY, float pupilFactor,
-                               float upperLidFactor, float lowerLidFactor, float blinkFactor,
+                               float upperLidFactor, float lowerLidFactor, float eyelidGap,
                                uint16_t irisAngle, uint16_t scleraAngle);
 
   /** @brief Raw access to the current frame buffer for display transfer. */

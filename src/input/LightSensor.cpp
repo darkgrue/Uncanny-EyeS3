@@ -2,8 +2,8 @@
  * @file LightSensor.cpp
  * @brief Implementation of ambient light sensor for pupil size control.
  *
- * Auto-detects sensor connection by sampling ADC readings over ~250ms and
- * requiring a minimum variance (range >= 150 counts). When connected, performs
+ * Auto-detects sensor connection by sampling ADC readings over ~120ms and
+ * requiring average reading above LIGHT_LOWER_ADC_THRESHOLD. When connected, performs
  * a 16-sample calibration to establish min/max bounds for normalization.
  */
 #include <Arduino.h>
@@ -14,9 +14,9 @@ LightSensor::LightSensor(int pin) : m_pin(pin) {}
 /**
  * @brief Initialize the light sensor and detect connection status.
  *
- * Takes 8 samples spaced 15ms apart (~120ms total). A real photoresistor circuit
- * shows variance >= 150 counts as ambient light fluctuates naturally. Lower variance
- * indicates a floating pin, so m_connected is set to false.
+ * Takes 8 samples spaced 15ms apart (~120ms total). A floating pin reads near zero
+ * on average; a connected photoresistor in any lighting reads above
+ * LIGHT_LOWER_ADC_THRESHOLD due to the pull-up side of the voltage divider.
  */
 bool LightSensor::begin()
 {
