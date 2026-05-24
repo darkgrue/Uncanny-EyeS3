@@ -68,19 +68,21 @@ std::unique_ptr<Arduino_IIC> PCF85063(new Arduino_PCF85063(IIC_Bus, PCF85063_DEV
 void renderLoopTask(void *param);
 
 /**
- * @brief Scan for I2C devices connected to the I2C bus (SDA, SCL).
+ * @brief Scan for I2C devices connected to a given I2C bus.
  *
+ * @param wire Pointer to the TwoWire instance (e.g., &Wire or &Wire1).
+ * @param name String identifier for the bus (e.g., "Wire", "Wire1").
  * @return void
  */
-void debug_I2Cscan()
+void debug_I2Cscan(TwoWire *wire, const char *name)
 {
-  Serial.println("Scanning I2C bus...");
+  Serial.printf("Scanning %s bus...\n", name);
 
   uint8_t nDevices = 0;
   for (uint8_t address = 8; address < 127; address++)
   {
-    Wire.beginTransmission(address);
-    uint8_t error = Wire.endTransmission(); // Use the return value to see if a device acknowledged the address
+    wire->beginTransmission(address);
+    uint8_t error = wire->endTransmission();
 
     if (error == 0)
     {
@@ -420,7 +422,7 @@ void setup()
   if (Wire.begin(IIC_SDA, IIC_SCL, 100000))
   {
     Serial.println("Wire (I2C) initialized successfully.");
-    debug_I2Cscan();
+    debug_I2Cscan(&Wire, "Wire");
   }
   else
   {
@@ -431,6 +433,7 @@ void setup()
   if (Wire1.begin(QWIIC_SDA, QWIIC_SCL, 100000))
   {
     Serial.println("Wire1 (QWIIC) initialized successfully.");
+    debug_I2Cscan(&Wire1, "Wire1");
   }
   else
   {
