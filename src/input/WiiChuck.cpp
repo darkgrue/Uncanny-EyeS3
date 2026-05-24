@@ -26,29 +26,54 @@ WiiChuckInput::WiiChuckInput(uint8_t address, TwoWire &wire)
  */
 bool WiiChuckInput::begin()
 {
-  // Request raw (unencrypted) data mode.
-  // START, 0xF0, 0x55, STOPSTART, 0xFB, 0x00, STOP
-  m_wire.beginTransmission(m_address);
-  m_wire.write(0xF0);
-  m_wire.write(0x55);
-  m_wire.endTransmission(true);
-  m_wire.beginTransmission(m_address);
-  m_wire.write(0xFB);
-  m_wire.write(0x00);
-  if (m_wire.endTransmission(true) != 0)
+  // The Nunchuck needs time to stabilise after power-on before it will ACK
+  // the handshake. 100 ms covers cold-start and warm-reset races.
+  delay(100);
+
+  constexpr int     MAX_ATTEMPTS   = 5;
+  constexpr uint32_t RETRY_DELAY_MS = 50;
+
+  for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
   {
-    Serial.println("[WiiChuckInput] ERROR: Failed to set unencrypted data mode!");
+    // Step 1: enter unencrypted mode (0xF0 / 0x55)
+    m_wire.beginTransmission(m_address);
+    m_wire.write(0xF0);
+    m_wire.write(0x55);
+    uint8_t err = m_wire.endTransmission(true);
+    if (err != 0)
+    {
+      Serial.printf("[WiiChuckInput] attempt %d/%d: mode-enter NACK (err %u), retrying\n",
+                    attempt, MAX_ATTEMPTS, err);
+      delay(RETRY_DELAY_MS);
+      continue;
+    }
+
+    // Step 2: request raw (unencrypted) data (0xFB / 0x00)
+    m_wire.beginTransmission(m_address);
+    m_wire.write(0xFB);
+    m_wire.write(0x00);
+    err = m_wire.endTransmission(true);
+    if (err != 0)
+    {
+      Serial.printf("[WiiChuckInput] attempt %d/%d: raw-mode NACK (err %u), retrying\n",
+                    attempt, MAX_ATTEMPTS, err);
+      delay(RETRY_DELAY_MS);
+      continue;
+    }
+
+    // Handshake succeeded — confirm controller type.
+    if (identifyController() == NUNCHUCK)
+    {
+      Serial.println("[WiiChuckInput] WiiChuck initialized successfully.");
+      return true;
+    }
+
+    Serial.println("[WiiChuckInput] WARNING: Unexpected controller type.");
     return false;
   }
 
-  if(identifyController() == NUNCHUCK) {
-  Serial.println("[WiiChuckInput] WiiChuck initialized successfully.");
-  return true;
-  }
-  else {
-  Serial.println("[WiiChuckInput] WARNING: Unexpected Chuck type!");
+  Serial.printf("[WiiChuckInput] ERROR: handshake failed after %d attempts.\n", MAX_ATTEMPTS);
   return false;
-  }
 }
 
 /**
