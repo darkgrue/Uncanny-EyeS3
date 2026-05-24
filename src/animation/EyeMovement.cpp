@@ -144,6 +144,30 @@ void EyeMovement::startRandomMove()
 }
 
 /**
+ * @brief Directly set the current eye position, cancelling any active movement.
+ *
+ * Bounds-clamps the position to the same circle used by setTarget(), then
+ * writes it to all position fields so the saccade system restarts cleanly
+ * from this point when control returns to random or face-tracking mode.
+ */
+void EyeMovement::setCurrentPosition(float x, float y)
+{
+  float r = sqrtf(x * x + y * y);
+  if (r > m_boundsRadius)
+  {
+    x = (x / r) * m_boundsRadius;
+    y = (y / r) * m_boundsRadius;
+  }
+  m_currentX = x;
+  m_currentY = y;
+  m_startX   = x;
+  m_startY   = y;
+  m_targetX  = x;
+  m_targetY  = y;
+  m_moving   = false;
+}
+
+/**
  * @brief Start a directed movement to a specific position.
  * @param x Target X position.
  * @param y Target Y position.

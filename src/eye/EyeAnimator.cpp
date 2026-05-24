@@ -143,15 +143,31 @@ void EyeAnimator::update(uint32_t now)
     float tx = m_input->getTargetX();
     float ty = m_input->getTargetY();
     m_faceWasTracking = false;
-    m_movement.setTarget(tx, ty);
     m_movement.setRandomMode(false);
-    if (!m_movement.isMoving())
+
+    // Sync smooth position to current eye position on the first frame of control
+    // so the eye doesn't jump from wherever it was during autonomous movement.
+    if (!m_hadJoystickControl)
     {
-      m_movement.moveTo(tx, ty, EYE_MOVE_DURATION_MIN);
+      m_joystickSmX = m_movement.getX();
+      m_joystickSmY = m_movement.getY();
+      m_hadJoystickControl = true;
     }
+
+    // Adaptive exponential smoothing: blend factor scales with distance so large
+    // joystick deflections get a fast response while small ones stay smooth.
+    float dx    = tx - m_joystickSmX;
+    float dy    = ty - m_joystickSmY;
+    float dist  = sqrtf(dx * dx + dy * dy);
+    float alpha = constrain(JOYSTICK_BASE_ALPHA + dist * JOYSTICK_DIST_ALPHA, 0.0f, 1.0f);
+    m_joystickSmX += alpha * dx;
+    m_joystickSmY += alpha * dy;
+
+    m_movement.setCurrentPosition(m_joystickSmX, m_joystickSmY);
   }
   else if (m_faceInput && m_faceInput->hasExclusiveControl())
   {
+    m_hadJoystickControl = false;
     m_faceWasTracking = true;
     m_movement.setTargetAcquired();
     m_movement.setTarget(m_faceInput->getTargetX(), m_faceInput->getTargetY());
@@ -159,6 +175,7 @@ void EyeAnimator::update(uint32_t now)
   }
   else
   {
+    m_hadJoystickControl = false;
     if (m_faceWasTracking)
     {
       m_movement.setTargetLost();

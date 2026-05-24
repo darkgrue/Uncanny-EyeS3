@@ -131,6 +131,15 @@
 
 #define EYE_MOVE_EASING_STEEPNESS 3.0f
 
+// Joystick-directed smooth-follow parameters.
+// Applied per frame at ~120 FPS via adaptive exponential smoothing.
+// Alpha = BASE + distance * DIST, clamped to [0, 1].
+//   BASE_ALPHA: minimum blend per frame (small-movement smoothness).
+//   DIST_ALPHA: extra blend per unit of distance (large-move responsiveness).
+// At dist=0.0: alpha=0.12 → ~140 ms settling; at dist=0.6: alpha=0.30 → ~80 ms.
+#define JOYSTICK_BASE_ALPHA 0.12f
+#define JOYSTICK_DIST_ALPHA 0.30f
+
 // ============================================================================
 // EYELID / BLINK PARAMETERS
 // ============================================================================
@@ -224,6 +233,15 @@ public:
 
   /** @brief Returns true while a movement is in progress. */
   bool isMoving() const { return m_moving; }
+
+  /**
+   * @brief Directly set the current eye position, cancelling any active movement.
+   *
+   * Used by joystick smooth-follow to bypass the saccade system: the caller
+   * maintains its own smoothed position and writes it here each frame.
+   * Bounds-clamps the input the same way setTarget() does.
+   */
+  void setCurrentPosition(float x, float y);
 
   /** @brief Generate and start a new random saccade. */
   void startRandomMove();

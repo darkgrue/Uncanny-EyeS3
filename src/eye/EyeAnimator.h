@@ -195,6 +195,11 @@ private:
   static constexpr uint32_t BOOP_DURATION_MS  = 1500; // How long the boop holds
   static constexpr float    BOOP_SQUINT_FACTOR = 0.6f; // Eyelid closure (0=open,1=closed)
 
+  // Joystick smooth-follow state
+  float m_joystickSmX = 0.0f;       // Exponentially-smoothed joystick X target
+  float m_joystickSmY = 0.0f;       // Exponentially-smoothed joystick Y target
+  bool  m_hadJoystickControl = false; // True on the previous frame if joystick was driving
+
   bool     m_faceWasTracking = false; // True when face input had control last frame
   bool     m_wideActive = false;      // True while eyesWide() is held
   bool     m_booped = false;          // True when boop expression is active
