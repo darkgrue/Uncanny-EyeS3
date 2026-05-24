@@ -91,10 +91,8 @@ void BlinkFSM::normal()
  * During ENBLINK/DEBLINK, computes a smoothstep interpolation for natural
  * acceleration/deceleration. Optionally pauses at full closure before opening.
  */
-bool BlinkFSM::update(uint32_t elapsed)
+bool BlinkFSM::update()
 {
-  (void)elapsed;
-
   uint32_t now = micros();
 
   // Animated forced transitions — run before the m_forced guard so they

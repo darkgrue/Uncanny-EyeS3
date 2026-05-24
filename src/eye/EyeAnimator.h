@@ -94,8 +94,17 @@ public:
   /** @brief Current pupil constriction factor (0.45-0.8 typical range). */
   float getPupilFactor() const { return m_currentIris; }
 
-  /** @brief Current eyelid closure fraction (0.0 = open, 1.0 = closed). */
-  float getBlinkFactor() const { return m_blink.getFactor(); }
+  /**
+   * @brief Current eyelid closure fraction (0.0 = open, 1.0 = closed).
+   *
+   * Returns the controller's broadcasted factor when in follower mode so that
+   * autonomous blinks and all expression animations are mirrored exactly.
+   * Falls back to the local BlinkFSM when solo or when controller data is stale.
+   */
+  float getBlinkFactor() const
+  {
+    return (m_remoteBlinkFactor >= 0.0f) ? m_remoteBlinkFactor : m_blink.getFactor();
+  }
 
   /** @brief Returns true when a new frame should be rendered. */
   bool needsRender() const { return m_needsRender; }
@@ -206,6 +215,10 @@ private:
   uint32_t m_boopStart = 0;           // millis() when current boop began
   bool     m_needsRender = true;      // Flag to request a new frame render
   bool     m_initialized = false;     // True after successful begin()
+
+  EyeCommand m_broadcastCommand  = CMD_NONE; // Expression command set in update(), read by broadcastState()
+  float      m_remoteBlinkFactor = -1.0f;    // Controller's blinkFactor; -1 = not following (use local FSM)
+  float      m_remotePupilFactor = -1.0f;    // Controller's pupilFactor; -1 = not following (use local iris)
 
   float m_normalClosure = 0.15f; // Eyelid coverage at rest (0.0=fully open, 1.0=fully closed)
   float m_wideClosure = 0.0f;    // Eyelid coverage when wide/surprised (0.0=fully retracted, 1.0=fully closed)

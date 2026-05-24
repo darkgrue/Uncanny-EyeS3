@@ -203,9 +203,6 @@ public:
   /** @brief Set delay before resuming random movement after losing target (ms). */
   void setSaccadeDelay(uint32_t ms) { m_saccadeDelayAfterTrack = ms; }
 
-  /** @brief Mark that an external target is active (resets idle timer). */
-  void setTargetAcquired();
-
   /** @brief Mark that external target is lost (starts idle delay countdown). */
   void setTargetLost();
 
@@ -214,10 +211,9 @@ public:
 
   /**
    * @brief Advance movement by one tick.
-   * @param dt Milliseconds since last update (used for time-based duration).
    * @return true if the eye moved this tick.
    */
-  bool update(uint32_t dt);
+  bool update();
 
   /** @brief Current interpolated eye X position. */
   float getX() const { return m_currentX; }

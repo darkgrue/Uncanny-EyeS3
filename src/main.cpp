@@ -52,7 +52,6 @@ static DisplayHAL *s_display = nullptr;
 static WiiChuckInput *s_wiiChuck = nullptr;
 static GestureFaceInput *s_gestureFace = nullptr;
 static EyeSyncManager *s_syncManager = nullptr;
-static EyeInterpolator *s_interpolator = nullptr;
 static LightSensor *s_lightSensor = nullptr;
 
 #ifdef DEBUG_OVERLAY_ENABLED
@@ -402,8 +401,6 @@ void setupNetwork()
     Serial.println("ERROR: ESP-NOW init failed!");
   }
 
-  static EyeInterpolator interp;
-  s_interpolator = &interp;
 }
 
 /**

@@ -219,12 +219,11 @@ void WiiChuckInput::readData()
 bool WiiChuckInput::update()
 {
   uint32_t now = micros();
-  static uint32_t lastRead = 0;
 
-  if (now - lastRead > 16667)
+  if (now - m_lastRead > 16667)
   {
     readData();
-    lastRead = now;
+    m_lastRead = now;
     return true;
   }
   return false;

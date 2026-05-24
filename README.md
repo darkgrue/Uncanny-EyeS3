@@ -16,6 +16,7 @@ A port of the [Adafruit M4 Eyes](https://github.com/adafruit/Adafruit_Learning_S
 - Nintendo Wii Nunchuk (WiiChuck) — I2C puppeteering controller
 - LDR photoresistor — ambient light-driven pupil dilation
 - DFRobot Gravity Gesture & Face Detection Sensor — AI face tracking for eye targeting
+- MicroSD card — boot-time configuration via `/eyes_config.json` (ESP-NOW channel, security key, MAC allowlist)
 - SY6970 — battery fuel gauge / charger (on-board, auto-initialized)
 
 ---
@@ -27,7 +28,8 @@ A port of the [Adafruit M4 Eyes](https://github.com/adafruit/Adafruit_Learning_S
 - **WiiChuck puppeteering** — joystick-driven eye targeting with edge-triggered blink/boop and hold commands for close/wide expressions
 - **Face tracking** — AI gesture & face sensor directs gaze to the nearest detected face, overriding autonomous movement while yielding to WiiChuck joystick
 - **Light sensor pupil control** — photoresistor drives pupil dilation; falls back to autonomous iris animation when not connected
-- **Multi-eye ESP-NOW sync** — one device acts as controller, others follow with interpolated state at up to ~120 FPS
+- **Multi-eye ESP-NOW sync** — one device acts as controller, others follow with interpolated state at up to ~120 FPS; optional shared-key authentication prevents unauthorized devices from joining
+- **SD card configuration** — optional `/eyes_config.json` at boot sets ESP-NOW channel, shared key, and MAC allowlist; firmware runs with safe defaults when no card is present
 - **Runtime eye switching** — switch between registered eye designs over serial without reflashing
 - **Double-buffered PSRAM rendering** — two RGB565 frame buffers with dirty-region tracking minimize display transfer overhead
 - **User extension hooks** — `user_setup()` / `user_loop()` for custom sensor integrations
@@ -86,6 +88,8 @@ Any number of devices running the same firmware can synchronize over ESP-NOW:
 4. If no controller message is received within 100 ms, followers return to autonomous animation.
 
 If no WiiChuck is connected to any device, all units run independently in autonomous mode.
+
+ESP-NOW channel and security (shared key, MAC allowlist) are configured via the SD card config file; see [SD Card Configuration](#sd-card-configuration).
 
 ---
 
@@ -269,6 +273,78 @@ Face position is reported in camera pixel coordinates. The default normalization
 
 ---
 
+## SD Card Configuration
+
+An optional MicroSD card provides boot-time configuration without reflashing. The card is read once at startup and then released — it is not required while the firmware is running.
+
+### Pinout
+
+Both boards use the same dedicated SPI pins for the SD card:
+
+| SD Pin | GPIO |
+| ------ | ---- |
+| CS     | 38   |
+| MOSI   | 39   |
+| MISO   | 40   |
+| SCLK   | 41   |
+
+### Config File
+
+Place `/eyes_config.json` in the root directory of the card:
+
+```json
+{
+  "network": {
+    "channel": 1,
+    "key": "SharedPassphrase",
+    "allowed_macs": [
+      "AA:BB:CC:DD:EE:FF",
+      "11:22:33:44:55:66"
+    ]
+  }
+}
+```
+
+| Field                  | Type   | Default  | Description                                                             |
+| ---------------------- | ------ | -------- | ----------------------------------------------------------------------- |
+| `network.channel`      | int    | `1`      | ESP-NOW WiFi channel (1–13); must match across all synchronized devices |
+| `network.key`          | string | _(none)_ | Shared passphrase or 32-hex-digit key; omit to disable authentication  |
+| `network.allowed_macs` | array  | _(none)_ | MAC allowlist; omit to accept any device with the correct key           |
+
+### Key Formats
+
+The `key` field accepts two formats:
+
+- **Passphrase** — any string up to 16 characters, zero-padded internally to 16 bytes.
+- **Hex key** — exactly 32 hexadecimal characters (e.g. `"0123456789ABCDEF0123456789ABCDEF"`), decoded directly to 16 raw bytes.
+
+Either format can be used interchangeably as long as the resulting 16-byte value is identical on all devices.
+
+### Security Model
+
+When a `key` is configured, the firmware derives a 32-bit token from it and stamps every outgoing ESP-NOW packet. Incoming packets are silently discarded if:
+
+- The token does not match (sender has a different or absent key).
+- An `allowed_macs` list is configured and the sender MAC is not in it.
+
+Devices sharing the same key communicate normally. Devices with different keys — or no key — silently ignore each other without producing errors. If no key is configured, any device on the channel is accepted.
+
+**All devices in a synchronized group must use matching keys.**
+
+The `allowed_macs` list provides an additional layer of access control independent of the key. If both are configured, a packet must pass both checks.
+
+### Graceful Degradation
+
+The firmware starts normally regardless of SD card state:
+
+- No SD card inserted
+- Card present but `/eyes_config.json` missing
+- Config file present but malformed JSON
+
+In all cases the defaults are used: channel 1, no authentication, all senders accepted. A message is printed to serial indicating which condition was detected.
+
+---
+
 ## Input Priority
 
 ### Movement Priority
@@ -329,6 +405,8 @@ src/
     GestureFaceInput        # DFRobot Gravity Gesture & Face Detection sensor
   network/
     EyeSync                 # ESP-NOW controller/follower synchronization
+  config/
+    SDConfig                # SD card boot-time configuration reader
   common/
     DisplayHAL.h            # Abstract display interface
     EyeState.h              # Shared state structs and enums

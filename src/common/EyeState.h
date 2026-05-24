@@ -85,6 +85,7 @@ struct EyeSyncMessage
   float    eyeY;          // Eye position Y (-1.0 to +1.0)
   float    pupilFactor;   // Pupil dilation (0.0 to 1.0)
   uint8_t  blinkState;    // EyeBlinkState enum value
+  float    blinkFactor;   // Current eyelid closure (0.0 = open, 1.0 = closed)
   uint32_t timestamp;     // Sender timestamp (millis) for interpolation
   uint8_t  command;       // EyeCommand (blink, boop, close, wide, normal)
   uint32_t networkToken;  // App-layer auth token (0 = no security)

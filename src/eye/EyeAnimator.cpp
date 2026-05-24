@@ -169,12 +169,12 @@ void EyeAnimator::update(uint32_t now)
   {
     m_hadJoystickControl = false;
     m_faceWasTracking = true;
-    m_movement.setTargetAcquired();
     m_movement.setTarget(m_faceInput->getTargetX(), m_faceInput->getTargetY());
     m_movement.setRandomMode(false);
   }
   else
   {
+    bool wasJoystick = m_hadJoystickControl;
     m_hadJoystickControl = false;
     if (m_faceWasTracking)
     {
@@ -182,13 +182,17 @@ void EyeAnimator::update(uint32_t now)
       m_movement.setRandomMode(true);
       m_faceWasTracking = false;
     }
-    else if (m_input && !m_movement.isMoving() &&
-             m_movement.getTargetX() == 0 && m_movement.getTargetY() == 0)
+    else if (wasJoystick)
     {
+      // Joystick just returned to deadzone — resume autonomous saccades.
       m_movement.setTargetLost();
       m_movement.setRandomMode(true);
     }
   }
+
+  // Determine the expression command to broadcast this frame before any flags
+  // are cleared, so broadcastState() can read m_broadcastCommand after update().
+  m_broadcastCommand = CMD_NONE;
 
   if (m_input)
   {
@@ -196,48 +200,57 @@ void EyeAnimator::update(uint32_t now)
     {
       eyesBoop();
       m_input->clearBoopFlag();
+      m_broadcastCommand = CMD_BOOP;
     }
-    else if (!m_booped)
+    else if (m_booped)
     {
-      // While a boop is active, ignore held C/Z states so they don't override
-      // the squint. wantsBoop() is edge-triggered (one frame), but wantsWide()
-      // and wantsClose() stay true as long as the buttons are held.
-      if (m_input->wantsWide())
-      {
-        eyesWide();
-      }
-      else if (m_input->wantsClose())
-      {
-        eyesClose();
-      }
-      else
-      {
-        eyesNormal();
-      }
+      // Boop is playing out — keep CMD_NONE so the follower's own boop timer
+      // runs undisturbed instead of being cancelled by a premature CMD_NORMAL.
+    }
+    else if (m_input->wantsWide())
+    {
+      eyesWide();
+      m_broadcastCommand = CMD_WIDE;
+    }
+    else if (m_input->wantsClose())
+    {
+      eyesClose();
+      m_broadcastCommand = CMD_CLOSE;
+    }
+    else
+    {
+      eyesNormal();
+      m_broadcastCommand = CMD_NORMAL; // Tells follower to exit any forced state.
     }
 
     if (m_input->wantsBlink())
     {
       eyesBlink();
       m_input->clearBlinkFlag();
+      m_broadcastCommand = CMD_BLINK; // Edge-triggered; captured before flag is cleared.
     }
   }
 
   processNetworkInput();
 
-  uint32_t dt = millis() - m_lastLightRead;
-  m_movement.update(dt);
+  m_movement.update();
 
-  m_blink.update(micros());
+  m_blink.update();
 
   if (m_lightSensorPin >= 0)
   {
     updateLightSensor(now);
   }
-  else
+  else if (m_remotePupilFactor < 0.0f)
   {
+    // Only run autonomous iris when not mirroring a controller. Suppressing it
+    // here prevents the accumulating autonomous value from bleeding through on
+    // any frame where network data arrives slightly late.
     updateIrisAutonomous(now);
   }
+
+  if (m_remotePupilFactor >= 0.0f)
+    m_currentIris = m_remotePupilFactor;
 
   if (m_wideActive)
     m_currentIris = m_irisMin; // fully dilated pupils while wide
@@ -272,7 +285,7 @@ bool EyeAnimator::broadcastState()
     return false;
 
   bool shouldBroadcast = isController();
-  if (m_sync && m_sync->getPeerCount() > 0)
+  if (m_sync->getPeerCount() > 0)
   {
     shouldBroadcast = true;
   }
@@ -289,26 +302,11 @@ bool EyeAnimator::broadcastState()
   msg.eyeX = getEyeX();
   msg.eyeY = getEyeY();
   msg.pupilFactor = m_currentIris;
-  msg.blinkState = (uint8_t)m_blink.getState();
-  msg.timestamp = millis();
+  msg.blinkState  = (uint8_t)m_blink.getState();
+  msg.blinkFactor = m_blink.getFactor();
+  msg.timestamp   = millis();
 
-  msg.command = CMD_NONE;
-  if (m_input && m_input->wantsClose())
-  {
-    msg.command = CMD_CLOSE;
-  }
-  else if (m_input && m_input->wantsWide())
-  {
-    msg.command = CMD_WIDE;
-  }
-  else if (m_input && m_input->wantsBlink())
-  {
-    msg.command = CMD_BLINK;
-  }
-  else if (m_input && m_input->wantsBoop())
-  {
-    msg.command = CMD_BOOP;
-  }
+  msg.command = m_broadcastCommand;
 
   m_sync->broadcast(msg);
   return true;
@@ -392,39 +390,88 @@ void EyeAnimator::updateIrisAutonomous(uint32_t now)
  * data is fresh (within 100ms). Routes expression commands from the
  * remote state to the corresponding eye expression methods.
  */
+/**
+ * @brief Apply remote state received over ESP-NOW from the controller.
+ *
+ * Pupil stability is treated differently from blink/movement: on brief packet
+ * gaps the last remote pupil value is held rather than handing off to the
+ * autonomous iris, which would produce a visible twitch. The autonomous iris
+ * only resumes when the controller peer is fully dropped by pruneDropped()
+ * (default 5 s timeout). At that point m_irisSmooth is seeded from the last
+ * remote value so the hand-off is seamless.
+ */
 void EyeAnimator::processNetworkInput()
 {
-  if (!m_sync || !m_sync->hasController())
+  if (!m_sync)
     return;
   if (m_input)
-    return; // controller device: local input always takes precedence over network
+    return; // controller device: local input always takes precedence
+
+  if (!m_sync->hasController())
+  {
+    // Controller peer dropped by pruneDropped(). Seed the autonomous iris
+    // smoother from the last remote value so there is no visible jump.
+    if (m_remotePupilFactor >= 0.0f)
+    {
+      m_irisSmooth = constrain((m_remotePupilFactor - m_irisMin) / m_irisRange - 0.5f, -0.3f, 0.3f);
+      m_irisPrev[0] = m_irisSmooth;
+      m_lastIrisChange = millis();
+    }
+    m_remoteBlinkFactor = -1.0f;
+    m_remotePupilFactor = -1.0f;
+    return;
+  }
+
   if (m_sync->getLastRemoteTime() == 0)
     return; // no data received yet
 
   uint32_t now = millis();
 
-  if ((now - m_sync->getLastRemoteTime()) < 100)
+  if ((now - m_sync->getLastRemoteTime()) < 250)
   {
     EyeSyncMessage msg = m_sync->getLastRemoteState();
 
-    // Mirror the controller's position directly each frame, same as joystick
-    // smooth-follow. setTarget() alone does not start movement when m_moving is
-    // false and m_randomMode is false, so setCurrentPosition() is used instead.
     m_movement.setCurrentPosition(msg.eyeX, msg.eyeY);
     m_movement.setRandomMode(false);
 
+    // Mirror the controller's eyelid and pupil factors directly.
+    // The follower's own BlinkFSM keeps running for state tracking (isForced)
+    // but its getFactor() output is bypassed by getBlinkFactor() below.
+    m_remoteBlinkFactor = msg.blinkFactor;
+    m_remotePupilFactor = msg.pupilFactor;
+
     switch (msg.command)
     {
-    case CMD_BLINK:  eyesBlink();  break;
-    case CMD_BOOP:   eyesBoop();   break;
-    case CMD_CLOSE:  eyesClose();  break;
-    case CMD_WIDE:   eyesWide();   break;
-    case CMD_NORMAL: eyesNormal(); break;
+    case CMD_BLINK:
+      eyesBlink();
+      break;
+    case CMD_BOOP:
+      eyesBoop();
+      break;
+    case CMD_CLOSE:
+      eyesClose();
+      break;
+    case CMD_WIDE:
+      eyesWide();
+      break;
+    case CMD_NORMAL:
+      // Only exit a forced expression (close/wide); don't interrupt an
+      // autonomous blink or an active boop that is still timing out.
+      if (m_blink.isForced() && !m_booped)
+        eyesNormal();
+      break;
+    default:
+      break;
     }
   }
   else
   {
-    // Stale data — resume autonomous movement until the controller is heard again.
+    // Controller registered but data is stale. Resume autonomous blink and
+    // movement, but hold m_remotePupilFactor at the last known value rather
+    // than handing off to the autonomous iris — that hand-off would produce a
+    // visible twitch on brief WiFi gaps. The pupil reverts to autonomous only
+    // when hasController() becomes false (pruneDropped timeout).
+    m_remoteBlinkFactor = -1.0f;
     m_movement.setTargetLost();
     m_movement.setRandomMode(true);
   }

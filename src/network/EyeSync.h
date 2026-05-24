@@ -93,16 +93,16 @@ public:
   const uint8_t *getPeerMac(int index) const;
 
   /** @brief True when a controller peer has been identified. */
-  bool hasController() const { return m_hasController; }
+  bool hasController() const;
 
   /** @brief Set the controller's MAC address. */
   void setControllerMac(const uint8_t *mac);
 
   /** @brief Get the most recently received state from the controller. */
-  EyeSyncMessage getLastRemoteState() const { return m_lastRemoteState; }
+  EyeSyncMessage getLastRemoteState() const;
 
   /** @brief Millis() timestamp of the last received state. */
-  uint32_t getLastRemoteTime() const { return m_lastRemoteTime; }
+  uint32_t getLastRemoteTime() const;
 
   // --- Security configuration (call before begin()) ---
 
@@ -144,6 +144,11 @@ private:
   static void onDataReceived(const uint8_t *mac, const uint8_t *data, int data_len);
 #endif
 
+  // Spinlock protecting all shared state written by the WiFi callback and read
+  // from Core 0 (pruneDropped) or Core 1 (render task). Declared mutable so
+  // const getters can lock without a const_cast.
+  mutable portMUX_TYPE m_mux = portMUX_INITIALIZER_UNLOCKED;
+
   bool     m_initialized   = false;
   bool     m_hasController = false;
   uint8_t  m_controllerMac[6];
@@ -165,45 +170,6 @@ private:
   uint32_t m_networkToken                = 0;     // App-layer token (0 = disabled)
   uint8_t  m_allowedMacs[8][6]           = {};    // Sender MAC allowlist
   int      m_allowedMacCount             = 0;
-};
-
-/**
- * @brief Interpolates remote eye state for smooth follower animation.
- *
- * Maintains previous and target states with timestamps and performs
- * linear interpolation between them as time advances. Stale data
- * detection allows the follower to detect loss of controller signal.
- */
-class EyeInterpolator
-{
-public:
-  EyeInterpolator();
-
-  /** @brief Update with a new target state from the network. */
-  void updateTarget(const EyeSyncMessage &remote, uint32_t now);
-
-  /** @brief Interpolated eye X at the given time. */
-  float getX(uint32_t now) const;
-
-  /** @brief Interpolated eye Y at the given time. */
-  float getY(uint32_t now) const;
-
-  /** @brief Interpolated pupil factor at the given time. */
-  float getPupil(uint32_t now) const;
-
-  /** @brief Returns true if the remote data is older than maxAge. */
-  bool isStale(uint32_t now, uint32_t maxAge = 100000) const;
-
-private:
-  EyeSyncMessage m_target;
-  uint32_t m_targetTime = 0;
-
-  EyeSyncMessage m_prev;
-  uint32_t m_prevTime = 0;
-
-  float m_currentX = 0.5f;
-  float m_currentY = 0.5f;
-  float m_currentPupil = 0.5f;
 };
 
 #endif // EYE_SYNC_H

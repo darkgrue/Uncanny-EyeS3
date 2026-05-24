@@ -113,6 +113,7 @@ private:
   uint8_t m_status[6] = {0};   /**< Raw bytes from Nunchuck. */
   bool m_lastZPressed = false; /**< Previous frame Z state (for edge detection). */
   bool m_lastCPressed = false; /**< Previous frame C state (for edge detection). */
+  uint32_t m_lastRead = 0;     /**< micros() timestamp of last I2C poll. */
 };
 
 #endif // WIICHUCK_H

@@ -59,10 +59,9 @@ public:
 
   /**
    * @brief Advance the state machine.
-   * @param elapsed Microseconds since the last update (use micros()).
    * @return true if state or factor changed.
    */
-  bool update(uint32_t elapsed);
+  bool update();
 
   /** @brief Current eyelid closure factor (0.0 = open, 1.0 = closed). */
   float getFactor() const { return m_factor; }

@@ -46,13 +46,6 @@ void EyeMovement::setTarget(float x, float y)
   }
 }
 
-/** @brief Mark that an external target is active; resets the idle timer. */
-void EyeMovement::setTargetAcquired()
-{
-  m_lastTrackTime = millis();
-  m_idle = true;
-}
-
 /** @brief Mark that an external target is lost; starts the saccade delay countdown. */
 void EyeMovement::setTargetLost()
 {
@@ -115,8 +108,8 @@ void EyeMovement::startRandomMove()
   float centerBias = currentDist * EYE_MOVE_CENTER_BIAS_FACTOR;
   centerBias = constrain(centerBias, 0.0f, EYE_MOVE_CENTER_BIAS_MAX);
 
-  float biasedTargetX = targetX * (1.0f - centerBias);
-  float biasedTargetY = targetY * (1.0f - centerBias);
+  float biasedTargetX = 0.5f + (targetX - 0.5f) * (1.0f - centerBias);
+  float biasedTargetY = 0.5f + (targetY - 0.5f) * (1.0f - centerBias);
 
   m_targetX = biasedTargetX;
   m_targetY = biasedTargetY;
@@ -213,12 +206,10 @@ static float saccadeEasing(float t)
  * based on elapsed/ duration. On completion, enters fixation idle state with
  * a random pause duration before the next saccade.
  *
- * @param dt Milliseconds since last update (unused — timing is wall-clock based).
  * @return true if the eye moved this tick.
  */
-bool EyeMovement::update(uint32_t dt)
+bool EyeMovement::update()
 {
-  (void)dt;
   if (!m_moving)
   {
     if (m_randomMode)

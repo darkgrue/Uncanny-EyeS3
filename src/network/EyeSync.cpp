@@ -1,15 +1,12 @@
 ﻿/**
  * @file EyeSync.cpp
- * @brief Implementation of ESP-NOW peer synchronization and state interpolation.
+ * @brief Implementation of ESP-NOW peer synchronization.
  *
  * Initializes ESP-NOW, registers send/receive callbacks, and routes incoming
  * EyeSyncMessage packets to registered callbacks. The static singleton pattern
  * (s_instance) is used to bridge the C-style ESP-NOW callbacks back to the
- * object instance.
- *
- * EyeInterpolator performs smoothstep easing between received states using
- * timestamps so that locally rendered motion is fluid even when network
- * packets arrive irregularly.
+ * object instance. All shared state is protected with a portMUX_TYPE spinlock
+ * so WiFi-task callbacks (any core) and the render task (Core 1) do not race.
  */
 #include "EyeSync.h"
 #include <Arduino.h>
@@ -153,23 +150,32 @@ bool EyeSyncManager::addPeer(const uint8_t *mac)
 {
   uint32_t now = millis();
 
+  taskENTER_CRITICAL(&m_mux);
+
   for (int i = 0; i < m_peerCount; i++)
   {
     if (memcmp(m_peerMACS[i], mac, 6) == 0)
     {
       m_peerLastSeen[i] = now;
+      taskEXIT_CRITICAL(&m_mux);
       return true;
     }
   }
 
   if (m_peerCount >= 8)
+  {
+    taskEXIT_CRITICAL(&m_mux);
     return false;
+  }
 
   memcpy(m_peerMACS[m_peerCount], mac, 6);
   m_peerLastSeen[m_peerCount] = now;
   m_peerCount++;
+  int count = m_peerCount;
+  taskEXIT_CRITICAL(&m_mux);
+
   Serial.printf("[EyeSync] New peer: %02X:%02X:%02X:%02X:%02X:%02X (%d total)\n",
-                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], m_peerCount);
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], count);
   return true;
 }
 
@@ -178,18 +184,21 @@ bool EyeSyncManager::addPeer(const uint8_t *mac)
  *
  * Uses swap-with-last compaction to avoid shifting the whole array. Resets
  * hasController() if the dropped peer was the registered controller.
+ * Collects dropped MACs under the spinlock, then logs after releasing it so
+ * Serial I/O does not run inside a critical section.
  */
 void EyeSyncManager::pruneDropped(uint32_t timeoutMs)
 {
   uint32_t now = millis();
+  uint8_t droppedMacs[8][6];
+  int droppedCount = 0;
 
+  taskENTER_CRITICAL(&m_mux);
   for (int i = 0; i < m_peerCount; )
   {
     if (now - m_peerLastSeen[i] > timeoutMs)
     {
-      Serial.printf("[EyeSync] Peer dropped: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                    m_peerMACS[i][0], m_peerMACS[i][1], m_peerMACS[i][2],
-                    m_peerMACS[i][3], m_peerMACS[i][4], m_peerMACS[i][5]);
+      memcpy(droppedMacs[droppedCount++], m_peerMACS[i], 6);
 
       if (m_hasController && memcmp(m_peerMACS[i], m_controllerMac, 6) == 0)
       {
@@ -210,6 +219,14 @@ void EyeSyncManager::pruneDropped(uint32_t timeoutMs)
     {
       i++;
     }
+  }
+  taskEXIT_CRITICAL(&m_mux);
+
+  for (int i = 0; i < droppedCount; i++)
+  {
+    Serial.printf("[EyeSync] Peer dropped: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                  droppedMacs[i][0], droppedMacs[i][1], droppedMacs[i][2],
+                  droppedMacs[i][3], droppedMacs[i][4], droppedMacs[i][5]);
   }
 }
 
@@ -264,8 +281,11 @@ void EyeSyncManager::onDataReceived(const esp_now_recv_info_t *esp_now_info, con
     return;
 
   s_instance->addPeer(msg.macAddress);
+
+  taskENTER_CRITICAL(&s_instance->m_mux);
   s_instance->m_lastRemoteState = msg;
   s_instance->m_lastRemoteTime = millis();
+  taskEXIT_CRITICAL(&s_instance->m_mux);
 
   if (s_instance->m_onDataReceived)
   {
@@ -296,8 +316,11 @@ void EyeSyncManager::onDataReceived(const uint8_t *mac, const uint8_t *data, int
     return;
 
   s_instance->addPeer(mac);
+
+  taskENTER_CRITICAL(&s_instance->m_mux);
   s_instance->m_lastRemoteState = msg;
   s_instance->m_lastRemoteTime = millis();
+  taskEXIT_CRITICAL(&s_instance->m_mux);
 
   if (s_instance->m_onDataReceived)
   {
@@ -309,123 +332,57 @@ void EyeSyncManager::onDataReceived(const uint8_t *mac, const uint8_t *data, int
 /** @brief Number of registered ESP-NOW peers. */
 int EyeSyncManager::getPeerCount() const
 {
-  return m_peerCount;
+  taskENTER_CRITICAL(&m_mux);
+  int count = m_peerCount;
+  taskEXIT_CRITICAL(&m_mux);
+  return count;
 }
 
 /** @brief MAC address of the peer at the given index. */
 const uint8_t *EyeSyncManager::getPeerMac(int index) const
 {
+  taskENTER_CRITICAL(&m_mux);
   if (index < 0 || index >= m_peerCount)
+  {
+    taskEXIT_CRITICAL(&m_mux);
     return nullptr;
+  }
+  taskEXIT_CRITICAL(&m_mux);
   return m_peerMACS[index];
+}
+
+/** @brief True when a controller peer has been identified. */
+bool EyeSyncManager::hasController() const
+{
+  taskENTER_CRITICAL(&m_mux);
+  bool r = m_hasController;
+  taskEXIT_CRITICAL(&m_mux);
+  return r;
+}
+
+/** @brief Get the most recently received state from the controller. */
+EyeSyncMessage EyeSyncManager::getLastRemoteState() const
+{
+  taskENTER_CRITICAL(&m_mux);
+  EyeSyncMessage r = m_lastRemoteState;
+  taskEXIT_CRITICAL(&m_mux);
+  return r;
+}
+
+/** @brief Millis() timestamp of the last received state. */
+uint32_t EyeSyncManager::getLastRemoteTime() const
+{
+  taskENTER_CRITICAL(&m_mux);
+  uint32_t r = m_lastRemoteTime;
+  taskEXIT_CRITICAL(&m_mux);
+  return r;
 }
 
 /** @brief Record the MAC address of the controller peer. */
 void EyeSyncManager::setControllerMac(const uint8_t *mac)
 {
+  taskENTER_CRITICAL(&m_mux);
   m_hasController = true;
   memcpy(m_controllerMac, mac, 6);
-}
-
-// ---------------------------------------------------------------------------
-// EyeInterpolator
-// ---------------------------------------------------------------------------
-
-EyeInterpolator::EyeInterpolator()
-{
-  memset(&m_target, 0, sizeof(m_target));
-  memset(&m_prev, 0, sizeof(m_prev));
-  m_targetTime = 0;
-  m_prevTime = 0;
-}
-
-/**
- * @brief Update with a new target state from the network.
- *
- * Rolls the current target into m_prev, stores the new remote state
- * as the target, and records its timestamp.
- */
-void EyeInterpolator::updateTarget(const EyeSyncMessage &remote, uint32_t now)
-{
-  m_prev = m_target;
-  m_prevTime = m_targetTime;
-  m_target = remote;
-  m_targetTime = now;
-}
-
-/**
- * @brief Smoothstep-interpolated eye X at the given time.
- *
- * Uses smoothstep easing (3t² - 2t³) between the previous and target
- * states. Returns target value if interpolation has completed.
- */
-float EyeInterpolator::getX(uint32_t now) const
-{
-  if (m_targetTime == 0)
-    return 0.5f;
-
-  float t = (float)(now - m_targetTime) / 1000.0f;
-  float duration = (float)(m_targetTime - m_prevTime) / 1000.0f;
-
-  if (t >= duration || duration <= 0)
-  {
-    return m_target.eyeX;
-  }
-
-  float e = t / duration;
-  e = 3.0f * e * e - 2.0f * e * e * e;
-
-  return m_prev.eyeX + (m_target.eyeX - m_prev.eyeX) * e;
-}
-
-/** @brief Smoothstep-interpolated eye Y. */
-float EyeInterpolator::getY(uint32_t now) const
-{
-  if (m_targetTime == 0)
-    return 0.5f;
-
-  float t = (float)(now - m_targetTime) / 1000.0f;
-  float duration = (float)(m_targetTime - m_prevTime) / 1000.0f;
-
-  if (t >= duration || duration <= 0)
-  {
-    return m_target.eyeY;
-  }
-
-  float e = t / duration;
-  e = 3.0f * e * e - 2.0f * e * e * e;
-
-  return m_prev.eyeY + (m_target.eyeY - m_prev.eyeY) * e;
-}
-
-/**
- * @brief Interpolated pupil factor.
- *
- * Uses simple linear interpolation (no smoothstep) since pupil
- * transitions are slower and smoother than eye position.
- */
-float EyeInterpolator::getPupil(uint32_t now) const
-{
-  if (m_targetTime == 0)
-    return 0.5f;
-
-  float t = (float)(now - m_targetTime) / 1000.0f;
-  float duration = (float)(m_targetTime - m_prevTime) / 1000.0f;
-
-  if (t >= duration || duration <= 0)
-  {
-    return m_target.pupilFactor;
-  }
-
-  return m_prev.pupilFactor + (m_target.pupilFactor - m_prev.pupilFactor) * (t / duration);
-}
-
-/**
- * @brief Returns true if the last remote state is older than maxAge.
- * @param now Current time in milliseconds.
- * @param maxAge Staleness threshold in milliseconds (default 100ms).
- */
-bool EyeInterpolator::isStale(uint32_t now, uint32_t maxAge) const
-{
-  return (now - m_targetTime) > maxAge;
+  taskEXIT_CRITICAL(&m_mux);
 }
