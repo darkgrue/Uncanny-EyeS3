@@ -2,8 +2,8 @@
  * @file EyeMovement.h
  * @brief Saccadic eye movement generator with lognormal distribution and centering bias.
  *
- * Human eye movements naturally follow a lognormal distribution â€” most are small
- * microsaccades (~0.5-2Â°) with occasional larger saccades. This module generates
+ * Human eye movements naturally follow a lognormal distribution — most are small
+ * microsaccades (~0.5-2°) with occasional larger saccades. This module generates
  * realistic autonomous eye movement using that distribution, applies a centering
  * bias to pull the eye back toward center after peripheral movements, and uses
  * sigmoid easing to approximate the characteristic velocity profile of real saccades.
@@ -18,7 +18,7 @@
  * Lognormal Distribution Parameters
  * --------------------------------
  * These control the amplitude (size) distribution of random eye movements.
- * Lognormal is used because real saccades follow this distribution â€” most
+ * Lognormal is used because real saccades follow this distribution — most
  * movements are small, with a long tail of larger movements.
  *
  * EYE_MOVE_LOGNORMAL_SIGMA: Spread/shape of the amplitude distribution.
@@ -82,6 +82,22 @@
  *
  * EYELID_SMOOTHING: Smoothing factor for eyelid position changes. Default: 0.1.
  * BLINK_USE_SMOOTHSTEP: Enable smoothstep easing (0/1). Default: 1.
+ *
+ * ----------------------------------------------------------------------------
+ * Forced Expression Animation Durations
+ * ----------------------------------------------------------------------------
+ * When the Z or C button is pressed or released the eyelid animates smoothly
+ * to the target position using smoothstep easing instead of snapping instantly.
+ * These control how long each transition takes.
+ *
+ * EYELID_CLOSE_DURATION: ms to animate from resting gap to fully closed (Z hold).
+ *   Faster feels reflexive; slower feels deliberate. Range: 80-300. Default: 150.
+ *
+ * EYELID_WIDE_DURATION: ms to animate from resting gap to wide-open (C hold).
+ *   Should feel like a mild surprise — quick but not snappy. Range: 80-250. Default: 130.
+ *
+ * EYELID_NORMAL_DURATION: ms to animate back to the resting gap after button release.
+ *   A slower return feels more relaxed and natural. Range: 150-500. Default: 230.
  */
 #ifndef EYE_MOVEMENT_H
 #define EYE_MOVEMENT_H
@@ -137,6 +153,10 @@
 #define EYELID_WIDE_CLOSURE_DEFAULT 0.0f       // Default eyelid coverage when wide (0.0-1.0)
 #define EYELID_SMOOTHING 0.1f
 #define BLINK_USE_SMOOTHSTEP 1
+
+#define EYELID_CLOSE_DURATION  150  // ms: animate to fully closed on Z-button press
+#define EYELID_WIDE_DURATION   130  // ms: animate to wide-open on C-button press
+#define EYELID_NORMAL_DURATION 230  // ms: animate back to resting gap on button release
 
 // ============================================================================
 // End of parameters

@@ -13,13 +13,16 @@
 #include <stdint.h>
 
 /**
- * @brief Blink state machine states (mirrors M4_Eyes behavior).
+ * @brief Blink state machine states.
  */
 enum EyeBlinkState : uint8_t
 {
-  NOBLINK = 0, // Eyelids open, no blink in progress
-  ENBLINK = 1, // Closing phase of a blink
-  DEBLINK = 2  // Opening phase (re-opening) of a blink
+  NOBLINK       = 0, // Eyelids at resting gap, auto-blink armed
+  ENBLINK       = 1, // Automatic blink: closing phase
+  DEBLINK       = 2, // Automatic blink: opening phase
+  FORCINGCLOSE  = 3, // Animated transition to fully closed (Z-button hold)
+  FORCINGWIDE   = 4, // Animated transition to wide-open expression (C-button hold)
+  FORCINGNORMAL = 5  // Animated transition back to resting gap (button release)
 };
 
 /**

@@ -38,20 +38,31 @@ void BlinkFSM::trigger()
 
 void BlinkFSM::close()
 {
+  if (m_state == FORCINGCLOSE)
+    return; // already animating or holding — don't restart
   m_forced = true;
-  m_factor = 1.0f;
+  m_forceStart = m_factor;
+  m_forceTarget = 1.0f;
+  m_blinkDuration = EYELID_CLOSE_DURATION * 1000UL;
+  m_stateStart = micros();
+  m_state = FORCINGCLOSE;
 }
 
 void BlinkFSM::wide()
 {
-  m_forced = true;
-  m_factor = 0.0f;
+  wideTo(0.0f);
 }
 
 void BlinkFSM::wideTo(float gap)
 {
+  if (m_state == FORCINGWIDE && fabsf(m_forceTarget - gap) < 0.001f)
+    return; // already animating toward this target — don't restart
   m_forced = true;
-  m_factor = gap;
+  m_forceStart = m_factor;
+  m_forceTarget = gap;
+  m_blinkDuration = EYELID_WIDE_DURATION * 1000UL;
+  m_stateStart = micros();
+  m_state = FORCINGWIDE;
 }
 
 void BlinkFSM::setNormalGap(float gap)
@@ -59,7 +70,19 @@ void BlinkFSM::setNormalGap(float gap)
   m_targetGap = gap;
 }
 
-void BlinkFSM::normal(){m_factor = m_targetGap; if (m_forced) { m_state = NOBLINK; m_nextBlinkTime = random(BLINK_INTERVAL_MIN * 1000UL, BLINK_INTERVAL_MAX * 1000UL); } m_forced = false;}
+void BlinkFSM::normal()
+{
+  if (m_state == FORCINGNORMAL)
+    return; // already animating back to normal
+  if (!m_forced && m_state == NOBLINK)
+    return; // already at rest, nothing to do
+  m_forced = true; // hold off auto-blink while the transition plays out
+  m_forceStart = m_factor;
+  m_forceTarget = m_targetGap;
+  m_blinkDuration = EYELID_NORMAL_DURATION * 1000UL;
+  m_stateStart = micros();
+  m_state = FORCINGNORMAL;
+}
 
 /**
  * @brief Advance the FSM by elapsed microseconds.
@@ -72,12 +95,40 @@ bool BlinkFSM::update(uint32_t elapsed)
 {
   (void)elapsed;
 
+  uint32_t now = micros();
+
+  // Animated forced transitions — run before the m_forced guard so they
+  // actually advance each frame.
+  if (m_state == FORCINGCLOSE || m_state == FORCINGWIDE || m_state == FORCINGNORMAL)
+  {
+    uint32_t dt = now - m_stateStart;
+
+    if (dt >= m_blinkDuration)
+    {
+      m_factor = m_forceTarget;
+      if (m_state == FORCINGNORMAL)
+      {
+        // Transition complete: resume normal idle operation.
+        m_state = NOBLINK;
+        m_forced = false;
+        m_stateStart = now;
+        m_nextBlinkTime = random(BLINK_INTERVAL_MIN * 1000UL, BLINK_INTERVAL_MAX * 1000UL);
+        return true;
+      }
+      // FORCINGCLOSE / FORCINGWIDE: hold at target until button is released.
+      return false;
+    }
+
+    float t = (float)dt / (float)m_blinkDuration;
+    t = t * t * (3.0f - 2.0f * t); // smoothstep
+    m_factor = m_forceStart + (m_forceTarget - m_forceStart) * t;
+    return true;
+  }
+
   if (m_forced)
   {
     return false;
   }
-
-  uint32_t now = micros();
 
   if (m_state == NOBLINK && (now - m_stateStart) >= m_nextBlinkTime)
   {

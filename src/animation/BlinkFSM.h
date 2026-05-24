@@ -75,13 +75,16 @@ public:
 
 private:
   EyeBlinkState m_state = NOBLINK; // Current state in the blink cycle
-  float m_factor = 0.0f;           // Current closure factor (0.0-1.0)
-  bool m_forced = false;           // True when in forced expression
-  float m_targetGap = 0.0f;        // Target gap for normal state
+  float m_factor = 0.0f;           // Current closure factor (0.0=open, 1.0=closed)
+  bool m_forced = false;           // True when a forced expression is active or animating
+  float m_targetGap = 0.0f;        // Resting closure value set by setNormalGap()
 
-  uint32_t m_stateStart = 0;    // Timestamp when current state started
-  uint32_t m_blinkDuration = 0; // Duration of the closing or opening phase
-  uint32_t m_nextBlinkTime = 0; // Timestamp for next automatic blink
+  float m_forceStart = 0.0f;  // Closure factor at the start of a forced transition
+  float m_forceTarget = 0.0f; // Closure factor the forced transition is moving toward
+
+  uint32_t m_stateStart = 0;    // Timestamp (micros) when current state began
+  uint32_t m_blinkDuration = 0; // Duration of the current phase in microseconds
+  uint32_t m_nextBlinkTime = 0; // Interval until the next automatic blink (microseconds)
 };
 
 #endif // BLINK_FSM_H
