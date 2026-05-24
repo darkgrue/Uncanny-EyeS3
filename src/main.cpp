@@ -432,7 +432,7 @@ void setup()
 #endif
   Serial.println("===========================================");
 
-  SDConfig::load(s_deviceConfig);
+  SDConfig::load(s_deviceConfig, SD_CS, SD_SCLK, SD_MISO, SD_MOSI);
 
   // Use 100 kHz as a safe middle ground that works for all devices
   // on the shared I2C bus.

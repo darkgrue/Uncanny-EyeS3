@@ -68,10 +68,19 @@ public:
    * Returns false (with defaults in cfg) if the card is absent, the file is
    * missing, or the JSON is malformed.
    *
-   * @param cfg Output struct to populate.
+   * Pin numbers are passed by the caller (from BoardPins.h) so that this
+   * class does not need to include BoardPins.h itself — that header defines
+   * macros that conflict with Arduino variant constants when included before
+   * Arduino.h.
+   *
+   * @param cfg     Output struct to populate.
+   * @param csPin   SPI chip-select GPIO for the SD card.
+   * @param sckPin  SPI clock GPIO.
+   * @param misoPin SPI MISO GPIO.
+   * @param mosiPin SPI MOSI GPIO.
    * @return true on successful load; false if defaults were used.
    */
-  static bool load(DeviceConfig &cfg);
+  static bool load(DeviceConfig &cfg, int csPin, int sckPin, int misoPin, int mosiPin);
 
 private:
   static void     applyDefaults(DeviceConfig &cfg);

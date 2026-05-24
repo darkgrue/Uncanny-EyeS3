@@ -3,7 +3,6 @@
  * @brief SD card configuration reader implementation.
  */
 #include "SDConfig.h"
-#include "BoardPins.h"
 #include <Arduino.h>
 #include <SD.h>
 #include <SPI.h>
@@ -23,13 +22,13 @@
  * can freely use the SPI bus if needed. All log messages are prefixed with
  * "[SDConfig]" for easy filtering.
  */
-bool SDConfig::load(DeviceConfig &cfg)
+bool SDConfig::load(DeviceConfig &cfg, int csPin, int sckPin, int misoPin, int mosiPin)
 {
   applyDefaults(cfg);
 
-  SPI.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS);
+  SPI.begin(sckPin, misoPin, mosiPin, csPin);
 
-  if (!SD.begin(SD_CS))
+  if (!SD.begin(csPin))
   {
     Serial.println("[SDConfig] No SD card detected — using defaults.");
     return false;
