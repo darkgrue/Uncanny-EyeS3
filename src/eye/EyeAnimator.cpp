@@ -398,43 +398,34 @@ void EyeAnimator::processNetworkInput()
     return;
   if (m_input)
     return; // controller device: local input always takes precedence over network
+  if (m_sync->getLastRemoteTime() == 0)
+    return; // no data received yet
 
   uint32_t now = millis();
 
-  if (m_sync->getLastRemoteTime() > 0 && m_sync->getLastRemoteState().eyeX != 0)
+  if ((now - m_sync->getLastRemoteTime()) < 100)
   {
-    float remoteX = m_sync->getLastRemoteState().eyeX;
-    float remoteY = m_sync->getLastRemoteState().eyeY;
+    EyeSyncMessage msg = m_sync->getLastRemoteState();
 
-    if ((now - m_sync->getLastRemoteTime()) < 100)
+    // Mirror the controller's position directly each frame, same as joystick
+    // smooth-follow. setTarget() alone does not start movement when m_moving is
+    // false and m_randomMode is false, so setCurrentPosition() is used instead.
+    m_movement.setCurrentPosition(msg.eyeX, msg.eyeY);
+    m_movement.setRandomMode(false);
+
+    switch (msg.command)
     {
-      m_movement.setTargetAcquired();
-      m_movement.setTarget(remoteX, remoteY);
-      m_movement.setRandomMode(false);
-
-      EyeSyncMessage msg = m_sync->getLastRemoteState();
-      switch (msg.command)
-      {
-      case CMD_BLINK:
-        eyesBlink();
-        break;
-      case CMD_BOOP:
-        eyesBoop();
-        break;
-      case CMD_CLOSE:
-        eyesClose();
-        break;
-      case CMD_WIDE:
-        eyesWide();
-        break;
-      case CMD_NORMAL:
-        eyesNormal();
-        break;
-      }
+    case CMD_BLINK:  eyesBlink();  break;
+    case CMD_BOOP:   eyesBoop();   break;
+    case CMD_CLOSE:  eyesClose();  break;
+    case CMD_WIDE:   eyesWide();   break;
+    case CMD_NORMAL: eyesNormal(); break;
     }
   }
   else
   {
+    // Stale data — resume autonomous movement until the controller is heard again.
     m_movement.setTargetLost();
+    m_movement.setRandomMode(true);
   }
 }
