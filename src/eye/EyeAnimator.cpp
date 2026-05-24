@@ -188,7 +188,7 @@ void EyeAnimator::update(uint32_t now)
     {
       eyesClose();
     }
-    else
+    else if (!m_booped)
     {
       eyesNormal();
     }
@@ -214,6 +214,20 @@ void EyeAnimator::update(uint32_t now)
   else
   {
     updateIrisAutonomous(now);
+  }
+
+  if (m_booped)
+  {
+    if (millis() - m_boopStart < BOOP_DURATION_MS)
+    {
+      m_blink.wideTo(BOOP_SQUINT_FACTOR); // heavy squint — overrides whatever normal() set
+      m_currentIris = m_irisMin;          // fully dilated pupils
+    }
+    else
+    {
+      m_booped = false;
+      eyesNormal();
+    }
   }
 
   m_needsRender = true;

@@ -108,8 +108,19 @@ public:
   /** @brief Trigger a single blink. */
   void eyesBlink() { m_blink.trigger(); }
 
-  /** @brief Trigger a boop expression (tongue out). */
-  void eyesBoop() { m_booped = true; }
+  /**
+   * @brief Trigger a boop expression.
+   *
+   * Squints eyelids to BOOP_SQUINT_FACTOR and dilates pupils fully for
+   * BOOP_DURATION_MS, then automatically returns to normal. Visually
+   * distinct from eyesWide() which opens eyelids and leaves pupils unchanged.
+   */
+  void eyesBoop()
+  {
+    if (!m_booped)        // don't restart if already mid-boop
+      m_boopStart = millis();
+    m_booped = true;
+  }
 
   /** @brief Hold eyelids closed. */
   void eyesClose() { m_blink.close(); }
@@ -179,10 +190,15 @@ private:
   // Value of -1 means no switch is pending.
   std::atomic<int> m_pendingEyeIndex{-1};
 
-  bool m_faceWasTracking = false; // True when face input had control last frame
-  bool m_booped = false;          // True when boop expression is active
-  bool m_needsRender = true;      // Flag to request a new frame render
-  bool m_initialized = false;     // True after successful begin()
+  // Boop expression — squint + dilated pupils for a fixed duration
+  static constexpr uint32_t BOOP_DURATION_MS  = 1500; // How long the boop holds
+  static constexpr float    BOOP_SQUINT_FACTOR = 0.6f; // Eyelid closure (0=open,1=closed)
+
+  bool     m_faceWasTracking = false; // True when face input had control last frame
+  bool     m_booped = false;          // True when boop expression is active
+  uint32_t m_boopStart = 0;           // millis() when current boop began
+  bool     m_needsRender = true;      // Flag to request a new frame render
+  bool     m_initialized = false;     // True after successful begin()
 
   float m_normalClosure = 0.15f; // Eyelid coverage at rest (0.0=fully open, 1.0=fully closed)
   float m_wideClosure = 0.0f;    // Eyelid coverage when wide/surprised (0.0=fully retracted, 1.0=fully closed)
