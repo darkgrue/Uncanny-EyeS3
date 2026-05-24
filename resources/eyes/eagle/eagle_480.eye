@@ -1,5 +1,5 @@
 {
-    "name": "human_eye",
+    "name": "eagle_eye",
     "radiusFraction": 0.5,
     "backColor": 31759,
     "tracking": true,

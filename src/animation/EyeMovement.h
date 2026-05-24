@@ -149,14 +149,14 @@
 #define EYELID_UPPER_TRACK_STRENGTH 0.3f
 #define EYELID_LOWER_TRACK_STRENGTH 0.15f
 #define EYELID_SQUINT_FACTOR 0.7f
-#define EYELID_NORMAL_CLOSURE_DEFAULT 0.15f  // Default eyelid coverage when open (0.0-1.0)
-#define EYELID_WIDE_CLOSURE_DEFAULT 0.0f       // Default eyelid coverage when wide (0.0-1.0)
+#define EYELID_NORMAL_CLOSURE_DEFAULT 0.15f // Default eyelid coverage when open (0.0-1.0)
+#define EYELID_WIDE_CLOSURE_DEFAULT 0.0f    // Default eyelid coverage when wide (0.0-1.0)
 #define EYELID_SMOOTHING 0.1f
 #define BLINK_USE_SMOOTHSTEP 1
 
-#define EYELID_CLOSE_DURATION  150  // ms: animate to fully closed on Z-button press
-#define EYELID_WIDE_DURATION   130  // ms: animate to wide-open on C-button press
-#define EYELID_NORMAL_DURATION 230  // ms: animate back to resting gap on button release
+#define EYELID_CLOSE_DURATION 150  // ms: animate to fully closed on Z-button press
+#define EYELID_WIDE_DURATION 130   // ms: animate to wide-open on C-button press
+#define EYELID_NORMAL_DURATION 230 // ms: animate back to resting gap on button release
 
 // ============================================================================
 // End of parameters
