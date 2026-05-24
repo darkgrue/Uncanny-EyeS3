@@ -104,7 +104,36 @@ public:
   /** @brief Millis() timestamp of the last received state. */
   uint32_t getLastRemoteTime() const { return m_lastRemoteTime; }
 
+  // --- Security configuration (call before begin()) ---
+
+  /**
+   * @brief Set the 16-byte ESP-NOW Primary Master Key.
+   *
+   * Applied via esp_now_set_pmk() inside begin(). Secures future unicast
+   * encrypted peers. All devices in the network must share the same PMK.
+   * Has no effect if called after begin().
+   */
+  void setNetworkPmk(const uint8_t pmk[16]);
+
+  /**
+   * @brief Set the application-layer authentication token.
+   *
+   * broadcast() stamps this value into every outgoing EyeSyncMessage.
+   * onDataReceived() silently discards messages whose token does not match.
+   * Token 0 disables checking (default; accepts all messages).
+   */
+  void setNetworkToken(uint32_t token) { m_networkToken = token; }
+
+  /**
+   * @brief Add a MAC address to the sender allowlist.
+   *
+   * When the allowlist is non-empty, messages from unlisted senders are
+   * silently discarded (in addition to the token check). Up to 8 entries.
+   */
+  void addAllowedMac(const uint8_t mac[6]);
+
 private:
+  bool isAuthorized(const uint8_t *senderMac, uint32_t token) const;
   static EyeSyncManager *s_instance;
 
 #if ESP_NOW_NEW_API
@@ -115,20 +144,27 @@ private:
   static void onDataReceived(const uint8_t *mac, const uint8_t *data, int data_len);
 #endif
 
-  bool m_initialized = false;
-  bool m_hasController = false;
-  uint8_t m_controllerMac[6];
-  uint8_t m_channel = 1;
+  bool     m_initialized   = false;
+  bool     m_hasController = false;
+  uint8_t  m_controllerMac[6];
+  uint8_t  m_channel = 1;
   EyeSyncMessage m_lastRemoteState;
   uint32_t m_lastRemoteTime = 0;
 
-  OnPeerJoined m_onPeerJoined = nullptr;
-  OnPeerLeft m_onPeerLeft = nullptr;
+  OnPeerJoined   m_onPeerJoined   = nullptr;
+  OnPeerLeft     m_onPeerLeft     = nullptr;
   OnDataReceived m_onDataReceived = nullptr;
 
   uint8_t  m_peerMACS[8][6];
   uint32_t m_peerLastSeen[8] = {0};
   int      m_peerCount = 0;
+
+  // Security
+  uint8_t  m_networkPmk[16]              = {0};  // ESP-NOW PMK (set before begin())
+  bool     m_hasPmk                      = false;
+  uint32_t m_networkToken                = 0;     // App-layer token (0 = disabled)
+  uint8_t  m_allowedMacs[8][6]           = {};    // Sender MAC allowlist
+  int      m_allowedMacCount             = 0;
 };
 
 /**

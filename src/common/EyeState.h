@@ -72,18 +72,22 @@ struct EyeRuntime
  * @brief Message payload for ESP-NOW state synchronization.
  *
  * Broadcast from the controller eye to followers. Contains eye position,
- * pupil dilation, blink state, and expression commands.
+ * pupil dilation, blink state, expression commands, and an application-layer
+ * authentication token derived from the shared network key configured in
+ * /eyes_config.json. Receivers reject messages whose token does not match
+ * their own configured token (0 = no security configured on either end).
  */
 struct EyeSyncMessage
 {
-  uint8_t macAddress[6]; // Sender MAC address
-  uint8_t eyeIndex;      // Which eye this message controls (0, 1, ...)
-  float eyeX;            // Eye position X (-1.0 to +1.0)
-  float eyeY;            // Eye position Y (-1.0 to +1.0)
-  float pupilFactor;     // Pupil dilation (0.0 to 1.0)
-  uint8_t blinkState;    // EyeBlinkState enum value
-  uint32_t timestamp;    // Sender timestamp (millis) for interpolation
-  uint8_t command;       // EyeCommand (blink, boop, close, wide, normal)
+  uint8_t  macAddress[6]; // Sender MAC address
+  uint8_t  eyeIndex;      // Which eye this message controls (0, 1, ...)
+  float    eyeX;          // Eye position X (-1.0 to +1.0)
+  float    eyeY;          // Eye position Y (-1.0 to +1.0)
+  float    pupilFactor;   // Pupil dilation (0.0 to 1.0)
+  uint8_t  blinkState;    // EyeBlinkState enum value
+  uint32_t timestamp;     // Sender timestamp (millis) for interpolation
+  uint8_t  command;       // EyeCommand (blink, boop, close, wide, normal)
+  uint32_t networkToken;  // App-layer auth token (0 = no security)
 };
 
 /**

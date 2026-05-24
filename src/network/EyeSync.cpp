@@ -46,6 +46,15 @@ bool EyeSyncManager::begin(uint8_t channel)
   esp_now_register_send_cb(onDataSent);
   esp_now_register_recv_cb(onDataReceived);
 
+  // Apply PMK if one was configured before begin().
+  if (m_hasPmk)
+  {
+    if (esp_now_set_pmk(m_networkPmk) != ESP_OK)
+      Serial.println("[EyeSync] WARNING: esp_now_set_pmk() failed.");
+    else
+      Serial.println("[EyeSync] ESP-NOW PMK set.");
+  }
+
   // Register the broadcast peer so broadcast() can send without prior discovery.
   // ESP-NOW requires all destinations to be registered via esp_now_add_peer()
   // before esp_now_send() will accept them.
@@ -68,17 +77,69 @@ bool EyeSyncManager::begin(uint8_t channel)
 /**
  * @brief Broadcast an EyeSyncMessage to all ESP-NOW devices on the channel.
  *
- * Sends to the broadcast MAC (FF:FF:FF:FF:FF:FF) which was registered as a
- * peer in begin(). This avoids the need for out-of-band peer discovery — any
- * device running ESP-NOW on the same channel will receive the message.
+ * Stamps the configured network token into the message before sending.
+ * Devices with a different (or absent) token will silently discard it.
  */
 void EyeSyncManager::broadcast(const EyeSyncMessage &msg)
 {
   if (!m_initialized)
     return;
 
+  EyeSyncMessage stamped  = msg;
+  stamped.networkToken    = m_networkToken;
+
   static const uint8_t BROADCAST_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-  esp_now_send(BROADCAST_MAC, (const uint8_t *)&msg, sizeof(msg));
+  esp_now_send(BROADCAST_MAC, (const uint8_t *)&stamped, sizeof(stamped));
+}
+
+/** @brief Store the PMK for application during begin(). */
+void EyeSyncManager::setNetworkPmk(const uint8_t pmk[16])
+{
+  memcpy(m_networkPmk, pmk, 16);
+  m_hasPmk = true;
+}
+
+/** @brief Add a MAC to the sender allowlist (up to 8 entries). */
+void EyeSyncManager::addAllowedMac(const uint8_t mac[6])
+{
+  if (m_allowedMacCount < 8)
+    memcpy(m_allowedMacs[m_allowedMacCount++], mac, 6);
+}
+
+/**
+ * @brief Return true if the sender is permitted to control this device.
+ *
+ * Two independent checks:
+ *   Token:   if this device has a non-zero token, the message token must match.
+ *   Allowlist: if the allowlist is non-empty, the sender MAC must appear in it.
+ * Both checks must pass. Either check is skipped when not configured.
+ */
+bool EyeSyncManager::isAuthorized(const uint8_t *senderMac, uint32_t token) const
+{
+  if (m_networkToken != 0 && token != m_networkToken)
+  {
+    Serial.printf("[EyeSync] Rejected message: token 0x%08" PRIX32
+                  " from %02X:%02X:%02X:%02X:%02X:%02X\n",
+                  token,
+                  senderMac[0], senderMac[1], senderMac[2],
+                  senderMac[3], senderMac[4], senderMac[5]);
+    return false;
+  }
+
+  if (m_allowedMacCount > 0)
+  {
+    for (int i = 0; i < m_allowedMacCount; i++)
+    {
+      if (memcmp(senderMac, m_allowedMacs[i], 6) == 0)
+        return true;
+    }
+    Serial.printf("[EyeSync] Rejected message: MAC %02X:%02X:%02X:%02X:%02X:%02X not in allowlist\n",
+                  senderMac[0], senderMac[1], senderMac[2],
+                  senderMac[3], senderMac[4], senderMac[5]);
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -194,10 +255,13 @@ void EyeSyncManager::onDataReceived(const esp_now_recv_info_t *esp_now_info, con
 
   EyeSyncMessage msg;
   memcpy(&msg, data, sizeof(msg));
-  if (esp_now_info && esp_now_info->src_addr)
-  {
-    memcpy(msg.macAddress, esp_now_info->src_addr, 6);
-  }
+  const uint8_t *senderMac = (esp_now_info && esp_now_info->src_addr)
+                                  ? esp_now_info->src_addr
+                                  : msg.macAddress;
+  memcpy(msg.macAddress, senderMac, 6);
+
+  if (!s_instance->isAuthorized(senderMac, msg.networkToken))
+    return;
 
   s_instance->addPeer(msg.macAddress);
   s_instance->m_lastRemoteState = msg;
@@ -227,6 +291,9 @@ void EyeSyncManager::onDataReceived(const uint8_t *mac, const uint8_t *data, int
   EyeSyncMessage msg;
   memcpy(&msg, data, sizeof(msg));
   memcpy(msg.macAddress, mac, 6);
+
+  if (!s_instance->isAuthorized(mac, msg.networkToken))
+    return;
 
   s_instance->addPeer(mac);
   s_instance->m_lastRemoteState = msg;

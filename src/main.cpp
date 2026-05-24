@@ -24,6 +24,7 @@
 #include "input/LightSensor.h"
 #include "input/GestureFaceInput.h"
 #include "network/EyeSync.h"
+#include "config/SDConfig.h"
 #include "debug/DebugOverlay.h"
 #include "eyes.h"
 #include "EyeLibrary.h"
@@ -44,6 +45,7 @@ static uint32_t s_fpsTimer = 0;
 static uint32_t s_currentFps = 0;
 #endif
 
+static DeviceConfig    s_deviceConfig;
 static EyeProjectConfig s_config;
 static EyeAnimator *s_animator = nullptr;
 static DisplayHAL *s_display = nullptr;
@@ -367,7 +369,23 @@ void setupNetwork()
   WiFi.disconnect();
 
   static EyeSyncManager sync;
-  if (sync.begin(1))
+
+  // Apply security config before begin() so the PMK is set during esp_now_init.
+  if (s_deviceConfig.networkToken != 0)
+    sync.setNetworkToken(s_deviceConfig.networkToken);
+  if (s_deviceConfig.loaded)
+  {
+    // Only set PMK when a key was explicitly provided (all-zero PMK = unset).
+    bool hasPmk = false;
+    for (int i = 0; i < 16 && !hasPmk; i++)
+      hasPmk = s_deviceConfig.networkPmk[i] != 0;
+    if (hasPmk)
+      sync.setNetworkPmk(s_deviceConfig.networkPmk);
+  }
+  for (int i = 0; i < s_deviceConfig.allowedMacCount; i++)
+    sync.addAllowedMac(s_deviceConfig.allowedMacs[i]);
+
+  if (sync.begin(s_deviceConfig.networkChannel))
   {
     s_syncManager = &sync;
 
@@ -413,6 +431,8 @@ void setup()
   Serial.println("Unknown");
 #endif
   Serial.println("===========================================");
+
+  SDConfig::load(s_deviceConfig);
 
   // Use 100 kHz as a safe middle ground that works for all devices
   // on the shared I2C bus.
