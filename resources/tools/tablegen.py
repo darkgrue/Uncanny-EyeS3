@@ -10,10 +10,12 @@ Supports multiple display sizes:
   - 480x480  (T-RGB, 2.1" and 2.8" variants)
 
 Usage:
-    python tablegen.py <output_dir> [display_type]
-    python tablegen.py <output_dir> --all
+    python tablegen.py [display_type]
+    python tablegen.py -all
 
-display_type: amoled (466x466), trgb (480x480), or default (240x240)
+display_type: default (240x240), amoled (466x466), or trgb (480x480)
+
+Output is placed in include/display/ directory.
 """
 
 import math
@@ -30,6 +32,8 @@ DISPLAY_CONFIGS = {
     "amoled":  {"width": 466, "height": 466, "mapRadius": 233},
     "trgb":    {"width": 480, "height": 480, "mapRadius": 240},
 }
+
+OUTPUT_DIR = Path(__file__).parent.parent.parent / "include" / "display"
 
 
 def screen_to_map(mapRadius, eyeRadius, value):
@@ -170,7 +174,7 @@ def generate_display_tables(screenWidth, screenHeight, mapRadius):
     }
 
 
-def generate_display_header_file(outputDir, screenWidth, screenHeight, mapRadius, displayTables):
+def generate_display_header_file(screenWidth, screenHeight, mapRadius, displayTables):
     """Generate a header file with display-level tables."""
 
     if screenWidth == 466 and screenHeight == 466:
@@ -180,8 +184,7 @@ def generate_display_header_file(outputDir, screenWidth, screenHeight, mapRadius
     else:
         dispType = "240"
 
-    # Put display headers in a display subdirectory
-    displayDir = Path(outputDir) / "display"
+    displayDir = OUTPUT_DIR
     displayDir.mkdir(parents=True, exist_ok=True)
     headerPath = displayDir / f"display_{dispType}.h"
 
@@ -225,7 +228,7 @@ def generate_display_header_file(outputDir, screenWidth, screenHeight, mapRadius
     return headerPath
 
 
-def generate_all_displays(outputDir):
+def generate_all_displays():
     """Generate display tables for all supported display types."""
     for displayType, cfg in DISPLAY_CONFIGS.items():
         screenWidth = cfg["width"]
@@ -238,33 +241,25 @@ def generate_all_displays(outputDir):
         displayTables = generate_display_tables(
             screenWidth, screenHeight, mapRadius)
         generate_display_header_file(
-            outputDir, screenWidth, screenHeight, mapRadius, displayTables)
+            screenWidth, screenHeight, mapRadius, displayTables)
 
 
 if __name__ == "__main__":
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
     if len(sys.argv) < 2:
-        print("Usage: tablegen.py <output_dir> [display_type]")
-        print("       tablegen.py <output_dir> --all")
+        print("Usage: tablegen.py [display_type]")
+        print("       tablegen.py -all")
         print("")
-        print("display_type: amoled (466x466), trgb (480x480), or default (240x240)")
-        print("--all generates all display types")
+        print("display_type: default (240x240), amoled (466x466), or trgb (480x480)")
+        print("-all generates all display types")
+        print(f"Output directory: {OUTPUT_DIR}")
         sys.exit(1)
 
-    outputDir = sys.argv[1]
-
-    # Ensure output directory exists
-    Path(outputDir).mkdir(parents=True, exist_ok=True)
-
-    if len(sys.argv) >= 3 and sys.argv[2] == "--all":
-        generate_all_displays(outputDir)
-    elif len(sys.argv) >= 2:
-        displayType = sys.argv[2] if len(sys.argv) > 2 else "default"
-
-        if displayType not in DISPLAY_CONFIGS:
-            print(f"Unknown display type: {displayType}")
-            print(f"Available: {list(DISPLAY_CONFIGS.keys())}")
-            sys.exit(1)
-
+    if sys.argv[1] == "-all":
+        generate_all_displays()
+    elif sys.argv[1] in DISPLAY_CONFIGS:
+        displayType = sys.argv[1]
         cfg = DISPLAY_CONFIGS[displayType]
         screenWidth = cfg["width"]
         screenHeight = cfg["height"]
@@ -276,8 +271,8 @@ if __name__ == "__main__":
         displayTables = generate_display_tables(
             screenWidth, screenHeight, mapRadius)
         generate_display_header_file(
-            outputDir, screenWidth, screenHeight, mapRadius, displayTables)
+            screenWidth, screenHeight, mapRadius, displayTables)
     else:
-        print("Usage: tablegen.py <output_dir> [display_type]")
-        print("       tablegen.py <output_dir> --all")
+        print(f"Unknown display type: {sys.argv[1]}")
+        print(f"Available: {list(DISPLAY_CONFIGS.keys())}")
         sys.exit(1)

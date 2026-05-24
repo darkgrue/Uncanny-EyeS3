@@ -5,6 +5,7 @@ from pathlib import Path
 Import("env")
 
 print("[gen_display_tables_all] Installing prerequisites...")
+env.Execute("$PYTHONEXE -m pip install --upgrade pip")
 env.Execute("$PYTHONEXE -m pip install numpy")
 
 # Use SCons environment to get project directory without __file__
