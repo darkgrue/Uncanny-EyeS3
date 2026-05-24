@@ -41,7 +41,7 @@ EYEMOVEMENT_H = PROJECT_ROOT / 'src' / 'animation' / 'EyeMovement.h'
 # Screen size configurations
 SCREEN_SIZES = {
     240: {'width': 240, 'height': 240, 'eye_radius': 120, 'map_radius': 120},
-    466: {'width': 466, 'height': 466, 'eye_radius': 233, 'map_radius': 240},
+    466: {'width': 466, 'height': 466, 'eye_radius': 233, 'map_radius': 233},
     480: {'width': 480, 'height': 480, 'eye_radius': 240, 'map_radius': 240},
 }
 
