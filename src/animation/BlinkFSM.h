@@ -40,8 +40,22 @@ public:
   /** @brief Force eyelids fully open (surprise expression). */
   void wide();
 
-  /** @brief Return to normal automatic blinking. */
+  /**
+   * @brief Return to normal automatic blinking.
+   */
   void normal();
+
+  /**
+   * @brief Force eyelids to a specific gap value (wide expression).
+   * @param gap Target eyelid gap (0.0 = closed, 1.0 = fully open).
+   */
+  void wideTo(float gap);
+
+  /**
+   * @brief Set the target gap for normal state.
+   * @param gap Normal eyelid gap (0.0 = closed, 1.0 = fully open).
+   */
+  void setNormalGap(float gap);
 
   /**
    * @brief Advance the state machine.
@@ -63,6 +77,7 @@ private:
   EyeBlinkState m_state = NOBLINK; // Current state in the blink cycle
   float m_factor = 0.0f;           // Current closure factor (0.0-1.0)
   bool m_forced = false;           // True when in forced expression
+  float m_targetGap = 0.0f;        // Target gap for normal state
 
   uint32_t m_stateStart = 0;    // Timestamp when current state started
   uint32_t m_blinkDuration = 0; // Duration of the closing or opening phase

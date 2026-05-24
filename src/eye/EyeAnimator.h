@@ -116,12 +116,13 @@ public:
   /** @brief Return to normal eyelid state and resume random movement. */
   void eyesNormal()
   {
+    m_blink.setNormalGap(m_normalClosure);
     m_blink.normal();
     m_movement.setRandomMode(true);
   }
 
   /** @brief Open eyelids wide (surprise expression). */
-  void eyesWide() { m_blink.wide(); }
+  void eyesWide() { m_blink.wideTo(m_wideClosure); }
 
   /** @brief Get the currently active eye index. */
   int getEyeIndex() const { return m_eyeIndex; }
@@ -177,6 +178,9 @@ private:
   bool m_booped = false;          // True when boop expression is active
   bool m_needsRender = true;      // Flag to request a new frame render
   bool m_initialized = false;     // True after successful begin()
+
+  float m_normalClosure = 0.15f; // Eyelid coverage at rest (0.0=fully open, 1.0=fully closed)
+  float m_wideClosure = 0.0f;    // Eyelid coverage when wide/surprised (0.0=fully retracted, 1.0=fully closed)
 };
 
 #endif // EYE_ANIMATOR_H

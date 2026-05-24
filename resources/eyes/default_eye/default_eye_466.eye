@@ -22,10 +22,12 @@
         "angle": 0,
         "spin": 0,
         "mirror": false
-    },
+},
     "eyelid": {
         "color": 0,
         "upperFilename": "upper_466.png",
-        "lowerFilename": "lower_466.png"
+        "lowerFilename": "lower_466.png",
+        "normalClosure": 0.15,
+        "wideClosure": 0.0
     }
 }

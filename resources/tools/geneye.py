@@ -243,6 +243,9 @@ def generate_header(config: dict, eye_file: Path, output_path: Path, screen_size
     tracking = config.get('tracking', True)
     squint = config.get('squint', 0)
 
+    normal_closure = eyelid_config.get('normalClosure', 0.15)
+    wide_closure = eyelid_config.get('wideClosure', 0.0)
+
     lines.append(f'  const EyeDefinition eye PROGMEM = {{')
     lines.append(
         f'      "{eye_name}", {radius_frac}, {back_color}, {str(tracking).lower()}, {squint}, nullptr,')
@@ -253,7 +256,7 @@ def generate_header(config: dict, eye_file: Path, output_path: Path, screen_size
                  f'{iris.get("spin", 0)}, 0, 0 }},')
     lines.append(f'      {{ {{ nullptr, 0, 0 }}, {sclera.get("color", 0xFFFF)}, '
                  f'{sclera.get("angle", 0)}, {sclera.get("spin", 0)}, 0, 0 }},')
-    lines.append(f'      {{ upper, lower, {eyelid_config.get("color", 0)} }},')
+    lines.append(f'      {{ upper, lower, {eyelid_config.get("color", 0)}, {normal_closure}, {wide_closure} }},')
     lines.append(f'      {{ {map_radius}, nullptr, nullptr }}')
     lines.append('  };')
     lines.append('}  // namespace')

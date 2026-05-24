@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file BlinkFSM.cpp
  * @brief Implementation of blink animation state machine.
  *
@@ -21,6 +21,7 @@ void BlinkFSM::reset()
   m_state = NOBLINK;
   m_factor = 0.0f;
   m_forced = false;
+  m_targetGap = 0.0f;
   m_stateStart = 0;
   m_blinkDuration = 0;
   m_nextBlinkTime = random(BLINK_INTERVAL_MIN * 1000UL, BLINK_INTERVAL_MAX * 1000UL);
@@ -47,16 +48,18 @@ void BlinkFSM::wide()
   m_factor = 0.0f;
 }
 
-void BlinkFSM::normal()
+void BlinkFSM::wideTo(float gap)
 {
-  if (m_forced)
-  {
-    m_state = NOBLINK;
-    m_factor = 0.0f;
-    m_nextBlinkTime = random(BLINK_INTERVAL_MIN * 1000UL, BLINK_INTERVAL_MAX * 1000UL);
-  }
-  m_forced = false;
+  m_forced = true;
+  m_factor = gap;
 }
+
+void BlinkFSM::setNormalGap(float gap)
+{
+  m_targetGap = gap;
+}
+
+void BlinkFSM::normal(){m_factor = m_targetGap; if (m_forced) { m_state = NOBLINK; m_nextBlinkTime = random(BLINK_INTERVAL_MIN * 1000UL, BLINK_INTERVAL_MAX * 1000UL); } m_forced = false;}
 
 /**
  * @brief Advance the FSM by elapsed microseconds.
@@ -67,6 +70,8 @@ void BlinkFSM::normal()
  */
 bool BlinkFSM::update(uint32_t elapsed)
 {
+  (void)elapsed;
+
   if (m_forced)
   {
     return false;
@@ -102,7 +107,7 @@ bool BlinkFSM::update(uint32_t elapsed)
       else
       {
         m_state = NOBLINK;
-        m_factor = 0.0f;
+        m_factor = m_targetGap;
         m_nextBlinkTime = random(BLINK_INTERVAL_MIN * 1000UL, BLINK_INTERVAL_MAX * 1000UL);
       }
     }
@@ -110,7 +115,7 @@ bool BlinkFSM::update(uint32_t elapsed)
     {
       float t = (float)dt / (float)m_blinkDuration;
 
-#if BLINK_USE_SMOOTHstep
+#if BLINK_USE_SMOOTHSTEP
       t = t * t * (3.0f - 2.0f * t);
 #endif
 

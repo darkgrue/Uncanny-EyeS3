@@ -2,8 +2,8 @@
  * @file EyeMovement.h
  * @brief Saccadic eye movement generator with lognormal distribution and centering bias.
  *
- * Human eye movements naturally follow a lognormal distribution — most are small
- * microsaccades (~0.5-2°) with occasional larger saccades. This module generates
+ * Human eye movements naturally follow a lognormal distribution â€” most are small
+ * microsaccades (~0.5-2Â°) with occasional larger saccades. This module generates
  * realistic autonomous eye movement using that distribution, applies a centering
  * bias to pull the eye back toward center after peripheral movements, and uses
  * sigmoid easing to approximate the characteristic velocity profile of real saccades.
@@ -18,7 +18,7 @@
  * Lognormal Distribution Parameters
  * --------------------------------
  * These control the amplitude (size) distribution of random eye movements.
- * Lognormal is used because real saccades follow this distribution — most
+ * Lognormal is used because real saccades follow this distribution â€” most
  * movements are small, with a long tail of larger movements.
  *
  * EYE_MOVE_LOGNORMAL_SIGMA: Spread/shape of the amplitude distribution.
@@ -78,11 +78,10 @@
  *
  * EYELID_UPPER_TRACK_STRENGTH: How much upper eyelid tracks pupil (0.0-1.0). Default: 0.3.
  * EYELID_LOWER_TRACK_STRENGTH: How much lower eyelid tracks pupil. Default: 0.15.
- * EYELID_DEFAULT_GAP: Default eyelid gap when open (0.0-1.0). Default: 0.85.
  * EYELID_SQUINT_FACTOR: Eyelid closure during squint (0.0-1.0). Default: 0.7.
  *
  * EYELID_SMOOTHING: Smoothing factor for eyelid position changes. Default: 0.1.
- * BLINK_USE_SMOOTHstep: Enable smoothstep easing (0/1). Default: 1.
+ * BLINK_USE_SMOOTHSTEP: Enable smoothstep easing (0/1). Default: 1.
  */
 #ifndef EYE_MOVEMENT_H
 #define EYE_MOVEMENT_H
@@ -133,11 +132,11 @@
 
 #define EYELID_UPPER_TRACK_STRENGTH 0.3f
 #define EYELID_LOWER_TRACK_STRENGTH 0.15f
-#define EYELID_DEFAULT_GAP 0.85f
 #define EYELID_SQUINT_FACTOR 0.7f
-
+#define EYELID_NORMAL_CLOSURE_DEFAULT 0.15f  // Default eyelid coverage when open (0.0-1.0)
+#define EYELID_WIDE_CLOSURE_DEFAULT 0.0f       // Default eyelid coverage when wide (0.0-1.0)
 #define EYELID_SMOOTHING 0.1f
-#define BLINK_USE_SMOOTHstep 1
+#define BLINK_USE_SMOOTHSTEP 1
 
 // ============================================================================
 // End of parameters

@@ -36,10 +36,13 @@ void EyelidRenderer::begin(int displaySize, uint16_t eyeRadius, const EyelidConf
   m_hasCustomEyelids = (config.upper != nullptr && config.lower != nullptr);
   m_eyelidColor = config.color;
 
-  m_smoothedUpperFactor = EYELID_DEFAULT_GAP;
-  m_smoothedLowerFactor = EYELID_DEFAULT_GAP;
-  m_prevUpperY = 0.5f - (EYELID_DEFAULT_GAP * 0.5f);
-  m_prevLowerY = 0.5f + (EYELID_DEFAULT_GAP * 0.5f);
+  // Compute normal gap from normalClosure (gap = 1.0 - closure)
+  float normalGap = 1.0f - config.normalClosure;
+
+  m_smoothedUpperFactor = normalGap;
+  m_smoothedLowerFactor = normalGap;
+  m_prevUpperY = 0.5f - (normalGap * 0.5f);
+  m_prevLowerY = 0.5f + (normalGap * 0.5f);
 }
 
 /**
@@ -94,7 +97,7 @@ void EyelidRenderer::render(float eyeX, float eyeY, float eyelidGap, uint16_t *f
   float targetUpperY = calculateUpperLidY(eyeY, eyelidGap);
   float targetLowerY = calculateLowerLidY(eyeY, eyelidGap);
 
-#if BLINK_USE_SMOOTHstep
+#if BLINK_USE_SMOOTHSTEP
   constexpr float smoothK = 3.0f;
   auto smoothstep = [](float t)
   {
@@ -221,7 +224,7 @@ void EyelidRenderer::renderDefaultEyelids(int centerX, int centerY, float upperY
  * @brief Render custom eyelid shapes from the eye definition table.
  *
  * Uses per-column (startY, endY) pairs stored in the EyelidConfig.
- * Values of 255 indicate "no custom data" â€” falls back to a procedural
+ * Values of 255 indicate "no custom data" — falls back to a procedural
  * boundary based on blinkFactor. Otherwise, eyelid edges are computed
  * by scaling the table values by the current eye size.
  */

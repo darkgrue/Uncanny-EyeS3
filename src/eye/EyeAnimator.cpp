@@ -31,6 +31,13 @@ bool EyeAnimator::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
   m_display = display;
   m_eyeDef = &eyeDef;
 
+  m_normalClosure = eyeDef.eyelid.normalClosure;
+  m_wideClosure = eyeDef.eyelid.wideClosure;
+  
+
+  m_blink.setNormalGap(m_normalClosure);
+  m_blink.normal();
+
   if (!m_renderer.begin(display, eyeDef))
   {
     return false;
@@ -109,11 +116,11 @@ bool EyeAnimator::setEyeIndex(int index)
 }
 
 /**
- * @brief Main animation update — call frequently from the render task.
+ * @brief Main animation update â€” call frequently from the render task.
  *
  * Resolves eye position from input sources in priority order: primary input
- * (WiiChuck, exclusive control) → face detection (m_faceInput, face visible)
- * → autonomous random saccades. Applies network input, advances the movement
+ * (WiiChuck, exclusive control) â†’ face detection (m_faceInput, face visible)
+ * â†’ autonomous random saccades. Applies network input, advances the movement
  * system and blink FSM, and updates either the light sensor value or the
  * autonomous iris. Marks needsRender = true after processing.
  *

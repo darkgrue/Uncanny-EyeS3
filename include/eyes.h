@@ -80,8 +80,8 @@ struct EyelidConfig
   const uint8_t *upper;    // upper eyelid lookup table (pairs of startY, endY per column)
   const uint8_t *lower;    // lower eyelid lookup table
   uint16_t color;
-  float normalClosure;     // eyelid coverage fraction at rest (0.0=no eyelid, 1.0=fully closed)
-  float wideClosure;       // eyelid coverage when wide (0.0=fully retracted, 1.0=fully closed)
+  float normalClosure;     // eyelid coverage at rest (0.0=fully open, 1.0=fully closed)
+  float wideClosure;       // eyelid coverage when wide/surprised (0.0=fully retracted, 1.0=fully closed)
 };
 
 /**
