@@ -199,11 +199,7 @@ void TRGBDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
   if (!fb)
     return;
 
-  int fbWidth = 480;
-  if (gfx)
-  {
-    fbWidth = gfx->width();
-  }
+  int fbWidth = gfx->width();
 
   for (int row = 0; row < srcH; row++)
   {
