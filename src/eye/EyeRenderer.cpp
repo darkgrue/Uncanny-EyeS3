@@ -11,6 +11,7 @@
  */
 #include "EyeRenderer.h"
 #include <Arduino.h>
+#include <algorithm>
 #include <esp_heap_caps.h>
 
 // Debug: force eyelids to a fixed gap (0=closed, 100=open, 50=half).
@@ -179,7 +180,7 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   int pupilRadiusSq = (int)pupilRadius * (int)pupilRadius;
 
   uint16_t bgColor = eye.backColor;
-  memset(m_renderBuf, bgColor, m_displaySize * m_displaySize * sizeof(uint16_t));
+  std::fill(m_renderBuf, m_renderBuf + m_displaySize * m_displaySize, bgColor);
 
   float eyelidGap = 1.0f - blinkFactor;
 
