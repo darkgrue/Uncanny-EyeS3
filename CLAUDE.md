@@ -20,9 +20,11 @@ pio run -e trgb --target upload
 # Serial monitor (115200 baud)
 pio device monitor
 
+# Generate display polar-map tables (required once per new display size)
+python resources/tools/tablegen.py -all
+
 # Generate eye headers from .eye configs (required when adding/modifying eyes)
-python resources/eyes/tablegen.py include/ --all amoled
-python resources/eyes/tablegen.py include/ --all trgb
+python resources/tools/geneye.py -all
 ```
 
 ## Architecture
@@ -54,15 +56,17 @@ main.cpp
 
 ### Eye Definition Pipeline
 
-Eye definitions go through a two-step process before use:
+Eye definitions go through a four-step process before use:
 
 1. **JSON config** (`.eye` files in `resources/eyes/<name>/`): Fractional values (0.0–1.0) relative to display size. Texture/eyelid images referenced as relative paths in the same directory.
 
-2. **Code generation** (`tablegen.py`): Reads `.eye` and images, computes polar angle/distance maps and displacement tables, outputs `include/eyes/<name>_466.h` (AMOLED) and `include/eyes/<name>_480.h` (T-RGB). These headers define an `EyeDefinition` struct in a namespace matching the eye name.
+2. **Display table generation** (`resources/tools/tablegen.py`): Generates shared polar angle/distance maps and spherical displacement tables for each display size; outputs `include/display/display_466.h`, `display_480.h`, etc. Run once when adding a new display size.
 
-3. **Registration** (`include/EyeLibrary.h`): `#include`s the generated headers and adds them to `s_eyeRegistry[]`. Board selection is done with `#if defined(ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED)`.
+3. **Eye header generation** (`resources/tools/geneye.py`): Reads each `.eye` file and its eyelid PNGs, emits `include/eyes/<name>.h` containing the `EyeDefinition` struct. Run whenever an `.eye` config or eyelid image changes.
 
-4. **Runtime switching**: Serial command `E<n>` calls `switchEye(n)` → `EyeAnimator::setEyeIndex()`. Currently registered eyes: `default_eye`, `eagle`, `human_eye`.
+4. **Registration** (`include/EyeLibrary.h`): `#include`s the generated headers and adds them to `s_eyeRegistry[]`. Board selection is done with `#if defined(ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED)`.
+
+5. **Runtime switching**: Serial command `E<n>` calls `switchEye(n)` → `EyeAnimator::setEyeIndex()`. Currently registered eyes: `default_eye`, `eagle`, `human_eye`.
 
 ### Key Data Structures
 
