@@ -27,7 +27,9 @@
     },
     "eyelid": {
         "color": 0,
-        "normalClosure": 0.05,
+        "upperFilename": "upper_480.png",
+        "lowerFilename": "lower_480.png",
+        "normalClosure": 0.3,
         "wideClosure": 0.0
     }
 }

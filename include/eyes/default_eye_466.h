@@ -5,7 +5,7 @@
 
 namespace default_eye {
 
-  // Upper eyelid lookup table (466 columns, 0-255 range)
+  // upper eyelid lookup table (466 columns, 0-255 range)
   const uint8_t upper[932] PROGMEM = {
     152, 164, 152, 164, 144, 165, 144, 165, 137, 166, 137, 166, 132, 169, 132, 169,
     127, 170, 127, 170, 123, 171, 123, 171, 119, 172, 119, 172, 116, 172, 115, 173,
@@ -68,7 +68,7 @@ namespace default_eye {
     147, 181, 147, 181,
   };
 
-  // Lower eyelid lookup table (466 columns, 0-255 range)
+  // lower eyelid lookup table (466 columns, 0-255 range)
   const uint8_t lower[932] PROGMEM = {
     165, 161, 165, 161, 167, 163, 167, 163, 169, 164, 169, 164, 171, 165, 171, 165,
     173, 166, 174, 166, 175, 167, 176, 167, 176, 168, 177, 169, 178, 169, 179, 169,
@@ -136,7 +136,7 @@ namespace default_eye {
       { 0, 0, 0.35, 1.67 },
       { 0.5, { nullptr, 0, 0 }, 65281, 0, 0, 0, 0 },
       { { nullptr, 0, 0 }, 65535, 0, 0, 0, 0 },
-      { upper, lower, 0, 0.15, 0.0 },
+      { upper, lower, 0, 0.3, 0.0 },
       { 240, nullptr, nullptr }
   };
 }  // namespace

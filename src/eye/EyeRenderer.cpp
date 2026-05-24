@@ -248,14 +248,21 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
         goto useCurvedBoundary;
       }
 
+      (void)upperStart;
       float scale = (float)m_displaySize / 255.0f;
-      int upperStartY = (int)(upperStart * scale);
-      int lowerEndY = (int)(m_eyeDef->eyelid.lower[tableIdx + 1] * scale);
+      int upperInnerY = (int)(upperEnd * scale);
+      int lowerInnerY = (int)(m_eyeDef->eyelid.lower[tableIdx + 1] * scale);
 
       float gapClosed = 1.0f - eyelidGap;
-      int gapCenter = (upperStartY + lowerEndY) / 2;
-      int upperLidBottom = upperStartY + (int)(gapClosed * (gapCenter - upperStartY));
-      int lowerLidTop = lowerEndY - (int)(gapClosed * (lowerEndY - gapCenter));
+      int gapCenter = (upperInnerY + lowerInnerY) / 2;
+
+      // Anchor the fully-open position to the eye circle boundary so that
+      // wideClosure=0.0 leaves no eyelid visible anywhere within the circle.
+      int circleTop = eyeCenterY - dyMax;
+      int circleBottom = eyeCenterY + dyMax;
+
+      int upperLidBottom = circleTop + (int)(gapClosed * (float)(gapCenter - circleTop));
+      int lowerLidTop = circleBottom - (int)(gapClosed * (float)(circleBottom - gapCenter));
 
       visibleTop = upperLidBottom - eyeCenterY;
       visibleBottom = lowerLidTop - eyeCenterY;

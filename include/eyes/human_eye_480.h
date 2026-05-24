@@ -5,7 +5,7 @@
 
 namespace human_eye {
 
-  // Upper eyelid lookup table (480 columns, 0-255 range)
+  // upper eyelid lookup table (480 columns, 0-255 range)
   const uint8_t upper[960] PROGMEM = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -69,7 +69,7 @@ namespace human_eye {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   };
 
-  // Lower eyelid lookup table (480 columns, 0-255 range)
+  // lower eyelid lookup table (480 columns, 0-255 range)
   const uint8_t lower[960] PROGMEM = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

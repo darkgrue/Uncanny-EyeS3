@@ -25,7 +25,7 @@
 },
     "eyelid": {
         "color": 0,
-        "normalClosure": 0.15,
+        "normalClosure": 0.25,
         "wideClosure": 0.0
     }
 }

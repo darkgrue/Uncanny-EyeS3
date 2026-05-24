@@ -138,9 +138,15 @@ void EyeAnimator::update(uint32_t now)
 
   if (m_input && m_input->hasExclusiveControl())
   {
+    float tx = m_input->getTargetX();
+    float ty = m_input->getTargetY();
     m_faceWasTracking = false;
-    m_movement.setTarget(m_input->getTargetX(), m_input->getTargetY());
+    m_movement.setTarget(tx, ty);
     m_movement.setRandomMode(false);
+    if (!m_movement.isMoving())
+    {
+      m_movement.moveTo(tx, ty, EYE_MOVE_DURATION_MIN);
+    }
   }
   else if (m_faceInput && m_faceInput->hasExclusiveControl())
   {

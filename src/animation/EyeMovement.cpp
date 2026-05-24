@@ -151,6 +151,8 @@ void EyeMovement::startRandomMove()
  */
 void EyeMovement::moveTo(float x, float y, uint32_t durationMs)
 {
+  m_startX = m_currentX;
+  m_startY = m_currentY;
   setTarget(x, y);
   m_moveDuration = durationMs;
   m_moveStartTime = millis();

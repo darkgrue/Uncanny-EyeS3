@@ -5,7 +5,7 @@
 
 namespace eagle {
 
-  // Upper eyelid lookup table (466 columns, 0-255 range)
+  // upper eyelid lookup table (466 columns, 0-255 range)
   const uint8_t upper[932] PROGMEM = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -68,7 +68,7 @@ namespace eagle {
     0, 0, 0, 0,
   };
 
-  // Lower eyelid lookup table (466 columns, 0-255 range)
+  // lower eyelid lookup table (466 columns, 0-255 range)
   const uint8_t lower[932] PROGMEM = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -132,7 +132,7 @@ namespace eagle {
   };
 
   const EyeDefinition eye PROGMEM = {
-      "human_eye", 0.5, 31759, true, 0, nullptr,
+      "eagle_eye", 0.5, 31759, true, 0, nullptr,
       { 0, 0, 0.35, 1.67 },
       { 0.5, { nullptr, 0, 0 }, 65281, 0, 0, 0, 0 },
       { { nullptr, 0, 0 }, 65535, 0, 0, 0, 0 },
