@@ -49,6 +49,12 @@ void BlinkFSM::wide()
 
 void BlinkFSM::normal()
 {
+  if (m_forced)
+  {
+    m_state = NOBLINK;
+    m_factor = 0.0f;
+    m_nextBlinkTime = random(BLINK_INTERVAL_MIN * 1000UL, BLINK_INTERVAL_MAX * 1000UL);
+  }
   m_forced = false;
 }
 
