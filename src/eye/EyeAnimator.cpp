@@ -180,17 +180,23 @@ void EyeAnimator::update(uint32_t now)
       eyesBoop();
       m_input->clearBoopFlag();
     }
-    else if (m_input->wantsWide())
-    {
-      eyesWide();
-    }
-    else if (m_input->wantsClose())
-    {
-      eyesClose();
-    }
     else if (!m_booped)
     {
-      eyesNormal();
+      // While a boop is active, ignore held C/Z states so they don't override
+      // the squint. wantsBoop() is edge-triggered (one frame), but wantsWide()
+      // and wantsClose() stay true as long as the buttons are held.
+      if (m_input->wantsWide())
+      {
+        eyesWide();
+      }
+      else if (m_input->wantsClose())
+      {
+        eyesClose();
+      }
+      else
+      {
+        eyesNormal();
+      }
     }
 
     if (m_input->wantsBlink())
