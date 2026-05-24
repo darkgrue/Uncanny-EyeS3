@@ -124,6 +124,8 @@ private:
   uint16_t *m_scratchBuf = nullptr;
 
   EyelidRenderer m_eyelidRenderer; // Manages eyelid rendering
+
+  bool m_hasCustomLids = false; // Cached: true when eyelid tables have non-trivial data
 };
 
 #endif // EYE_RENDERER_H

@@ -69,8 +69,10 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
   m_eyelidRenderer.setTrackingEnabled(eyeDef.tracking);
 
   size_t bufSize = m_displaySize * m_displaySize * sizeof(uint16_t);
-  m_frameBuf1 = (uint16_t *)heap_caps_malloc(bufSize, MALLOC_CAP_8BIT | MALLOC_CAP_32BIT);
-  m_frameBuf2 = (uint16_t *)heap_caps_malloc(bufSize, MALLOC_CAP_8BIT | MALLOC_CAP_32BIT);
+  if (!m_frameBuf1)
+    m_frameBuf1 = (uint16_t *)heap_caps_malloc(bufSize, MALLOC_CAP_8BIT | MALLOC_CAP_32BIT);
+  if (!m_frameBuf2)
+    m_frameBuf2 = (uint16_t *)heap_caps_malloc(bufSize, MALLOC_CAP_8BIT | MALLOC_CAP_32BIT);
 
   if (!m_frameBuf1 || !m_frameBuf2)
   {
@@ -97,11 +99,28 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
 
   Serial.printf("[EyeRenderer] Double buffer allocated: %d bytes each\n", bufSize);
 
-  m_scratchBuf = (uint16_t *)heap_caps_malloc(SCRATCH_BUF_SIZE * sizeof(uint16_t),
-                                              MALLOC_CAP_8BIT | MALLOC_CAP_32BIT);
   if (!m_scratchBuf)
   {
-    Serial.println("[EyeRenderer] Warning: Failed to allocate scratch buffer!");
+    m_scratchBuf = (uint16_t *)heap_caps_malloc(SCRATCH_BUF_SIZE * sizeof(uint16_t),
+                                                MALLOC_CAP_8BIT | MALLOC_CAP_32BIT);
+    if (!m_scratchBuf)
+      Serial.println("[EyeRenderer] Warning: Failed to allocate scratch buffer!");
+  }
+
+  // Scan all eyelid table columns once so renderFrame() avoids the per-frame loop.
+  m_hasCustomLids = false;
+  if (eyeDef.eyelid.upper != nullptr && eyeDef.eyelid.lower != nullptr)
+  {
+    for (int col = 0; col < m_displaySize; col++)
+    {
+      uint8_t upperEnd   = eyeDef.eyelid.upper[col * 2 + 1];
+      uint8_t lowerStart = eyeDef.eyelid.lower[col * 2];
+      if ((upperEnd != 0 && upperEnd != 255) || (lowerStart != 0 && lowerStart != 255))
+      {
+        m_hasCustomLids = true;
+        break;
+      }
+    }
   }
 
   return true;
@@ -192,20 +211,7 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   int eyeCenterY = centerY + offsetY;
   (void)eyeCenterX;
 
-  bool hasCustomLids = false;
-  if (m_eyeDef->eyelid.upper != nullptr && m_eyeDef->eyelid.lower != nullptr)
-  {
-    for (int checkCol = 0; checkCol < m_displaySize; checkCol += 47)
-    {
-      uint8_t upperEnd = m_eyeDef->eyelid.upper[checkCol * 2 + 1];
-      uint8_t lowerStart = m_eyeDef->eyelid.lower[checkCol * 2];
-      if ((upperEnd != 0 && upperEnd != 255) || (lowerStart != 0 && lowerStart != 255))
-      {
-        hasCustomLids = true;
-        break;
-      }
-    }
-  }
+  bool hasCustomLids = m_hasCustomLids;
 
   for (int x = minX; x < maxX; x++)
   {
