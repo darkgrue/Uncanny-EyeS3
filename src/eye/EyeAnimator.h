@@ -112,8 +112,8 @@ public:
    * @brief Trigger a boop expression.
    *
    * Squints eyelids to BOOP_SQUINT_FACTOR and dilates pupils fully for
-   * BOOP_DURATION_MS, then automatically returns to normal. Visually
-   * distinct from eyesWide() which opens eyelids and leaves pupils unchanged.
+   * BOOP_DURATION_MS, then automatically returns to normal. Distinct from
+   * eyesWide() (fully open lids, dilated pupils) by the squinted eyelids.
    */
   void eyesBoop()
   {
@@ -131,10 +131,11 @@ public:
     m_blink.setNormalGap(m_normalClosure);
     m_blink.normal();
     m_movement.setRandomMode(true);
+    m_wideActive = false;
   }
 
-  /** @brief Open eyelids wide (surprise expression). */
-  void eyesWide() { m_blink.wideTo(m_wideClosure); }
+  /** @brief Open eyelids wide and dilate pupils (surprise expression). */
+  void eyesWide() { m_blink.wideTo(m_wideClosure); m_wideActive = true; }
 
   /** @brief Get the currently active eye index. */
   int getEyeIndex() const { return m_eyeIndex; }
@@ -195,6 +196,7 @@ private:
   static constexpr float    BOOP_SQUINT_FACTOR = 0.6f; // Eyelid closure (0=open,1=closed)
 
   bool     m_faceWasTracking = false; // True when face input had control last frame
+  bool     m_wideActive = false;      // True while eyesWide() is held
   bool     m_booped = false;          // True when boop expression is active
   uint32_t m_boopStart = 0;           // millis() when current boop began
   bool     m_needsRender = true;      // Flag to request a new frame render

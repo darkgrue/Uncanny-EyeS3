@@ -222,6 +222,9 @@ void EyeAnimator::update(uint32_t now)
     updateIrisAutonomous(now);
   }
 
+  if (m_wideActive)
+    m_currentIris = m_irisMin; // fully dilated pupils while wide
+
   if (m_booped)
   {
     if (millis() - m_boopStart < BOOP_DURATION_MS)
