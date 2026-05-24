@@ -396,6 +396,8 @@ void EyeAnimator::processNetworkInput()
 {
   if (!m_sync || !m_sync->hasController())
     return;
+  if (m_input)
+    return; // controller device: local input always takes precedence over network
 
   uint32_t now = millis();
 

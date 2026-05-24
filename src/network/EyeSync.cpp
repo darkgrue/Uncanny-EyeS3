@@ -82,11 +82,12 @@ void EyeSyncManager::broadcast(const EyeSyncMessage &msg)
 }
 
 /**
- * @brief Register a peer MAC for peer count tracking.
+ * @brief Track a peer MAC for peer count reporting.
  *
- * Deduplicates against the existing list. Calls esp_now_add_peer() only if
- * the MAC is not already registered with the ESP-NOW stack. The peer list
- * is capped at 8 entries matching the m_peerMACS[] array size.
+ * Deduplicates against the existing list and records the MAC. No unicast
+ * peer registration is needed because broadcast() always sends to the
+ * FF:FF:FF:FF:FF:FF address registered in begin(). The peer list is used
+ * only for getPeerCount() and getPeerMac().
  */
 bool EyeSyncManager::addPeer(const uint8_t *mac)
 {
@@ -98,17 +99,6 @@ bool EyeSyncManager::addPeer(const uint8_t *mac)
 
   if (m_peerCount >= 8)
     return false;
-
-  if (!esp_now_is_peer_exist(mac))
-  {
-    esp_now_peer_info_t info;
-    memset(&info, 0, sizeof(info));
-    memcpy(info.peer_addr, mac, 6);
-    info.channel = m_channel;
-    info.encrypt = false;
-    if (esp_now_add_peer(&info) != ESP_OK)
-      return false;
-  }
 
   memcpy(m_peerMACS[m_peerCount++], mac, 6);
   Serial.printf("[EyeSync] New peer: %02X:%02X:%02X:%02X:%02X:%02X (%d total)\n",

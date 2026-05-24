@@ -82,8 +82,8 @@ public:
    */
   bool broadcastState();
 
-  /** @brief Returns true when an input device has exclusive control. */
-  bool isController() const { return m_input && m_input->hasExclusiveControl(); }
+  /** @brief Returns true when a local input device (e.g. WiiChuck) is attached. */
+  bool isController() const { return m_input != nullptr; }
 
   /** @brief Current eye X position (-1.0 to +1.0). */
   float getEyeX() const { return m_movement.getX(); }
