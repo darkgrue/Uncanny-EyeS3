@@ -70,6 +70,9 @@ def parse_eyemovement_defaults() -> tuple:
     )
 
 
+_SIZE_SUFFIX_RE = re.compile(r'_(\d+)\.eye$', re.IGNORECASE)
+
+
 def find_eye_configs() -> list:
     """Find all .eye files in resources/eyes directory structure."""
     eye_configs = []
@@ -82,17 +85,16 @@ def find_eye_configs() -> list:
             continue
 
         for eye_file in eye_dir.glob('*.eye'):
-            screen_size = 480  # default
-            filename_lower = eye_file.name.lower()
-            if '466' in filename_lower:
-                screen_size = 466
-            elif '240' in filename_lower:
-                screen_size = 240
-
+            m = _SIZE_SUFFIX_RE.search(eye_file.name)
+            if not m or int(m.group(1)) not in SCREEN_SIZES:
+                print(f"  Warning: cannot determine screen size from filename "
+                      f"'{eye_file.name}' — skipping (expected suffix _NNN.eye "
+                      f"where NNN is one of {sorted(SCREEN_SIZES)})")
+                continue
             eye_configs.append({
                 'path': eye_file,
                 'name': eye_dir.name,
-                'screen_size': screen_size
+                'screen_size': int(m.group(1)),
             })
 
     return eye_configs
