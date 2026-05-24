@@ -46,39 +46,74 @@ bool EyeSyncManager::begin(uint8_t channel)
   esp_now_register_send_cb(onDataSent);
   esp_now_register_recv_cb(onDataReceived);
 
+  // Register the broadcast peer so broadcast() can send without prior discovery.
+  // ESP-NOW requires all destinations to be registered via esp_now_add_peer()
+  // before esp_now_send() will accept them.
+  static const uint8_t BROADCAST_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+  esp_now_peer_info_t bcast;
+  memset(&bcast, 0, sizeof(bcast));
+  memcpy(bcast.peer_addr, BROADCAST_MAC, 6);
+  bcast.channel = channel;
+  bcast.encrypt = false;
+  if (esp_now_add_peer(&bcast) != ESP_OK)
+  {
+    Serial.println("[EyeSync] WARNING: failed to add broadcast peer");
+  }
+
   m_initialized = true;
   m_channel = channel;
   return true;
 }
 
 /**
- * @brief Broadcast an EyeSyncMessage to all registered peers.
+ * @brief Broadcast an EyeSyncMessage to all ESP-NOW devices on the channel.
  *
- * Iterates over all known peer MAC addresses and sends the same message
- * to each. Called by EyeAnimator::broadcastState() each frame when
- * the device is a controller or has active peers.
+ * Sends to the broadcast MAC (FF:FF:FF:FF:FF:FF) which was registered as a
+ * peer in begin(). This avoids the need for out-of-band peer discovery — any
+ * device running ESP-NOW on the same channel will receive the message.
  */
 void EyeSyncManager::broadcast(const EyeSyncMessage &msg)
 {
   if (!m_initialized)
     return;
 
-  esp_now_peer_info_t peerInfo;
-  memset(&peerInfo, 0, sizeof(peerInfo));
+  static const uint8_t BROADCAST_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+  esp_now_send(BROADCAST_MAC, (const uint8_t *)&msg, sizeof(msg));
+}
 
+/**
+ * @brief Register a peer MAC for peer count tracking.
+ *
+ * Deduplicates against the existing list. Calls esp_now_add_peer() only if
+ * the MAC is not already registered with the ESP-NOW stack. The peer list
+ * is capped at 8 entries matching the m_peerMACS[] array size.
+ */
+bool EyeSyncManager::addPeer(const uint8_t *mac)
+{
   for (int i = 0; i < m_peerCount; i++)
   {
-    memcpy(peerInfo.peer_addr, m_peerMACS[i], 6);
-    peerInfo.channel = m_channel;
-    peerInfo.encrypt = false;
-
-    if (esp_now_send(peerInfo.peer_addr, (uint8_t *)&msg, sizeof(msg)) == ESP_OK)
-    {
-      Serial.printf("Sent to %02X:%02X:%02X:%02X:%02X:%02X\n",
-                    m_peerMACS[i][0], m_peerMACS[i][1], m_peerMACS[i][2],
-                    m_peerMACS[i][3], m_peerMACS[i][4], m_peerMACS[i][5]);
-    }
+    if (memcmp(m_peerMACS[i], mac, 6) == 0)
+      return true; // already known
   }
+
+  if (m_peerCount >= 8)
+    return false;
+
+  if (!esp_now_is_peer_exist(mac))
+  {
+    esp_now_peer_info_t info;
+    memset(&info, 0, sizeof(info));
+    memcpy(info.peer_addr, mac, 6);
+    info.channel = m_channel;
+    info.encrypt = false;
+    if (esp_now_add_peer(&info) != ESP_OK)
+      return false;
+  }
+
+  memcpy(m_peerMACS[m_peerCount++], mac, 6);
+  Serial.printf("[EyeSync] New peer: %02X:%02X:%02X:%02X:%02X:%02X (%d total)\n",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], m_peerCount);
+  return true;
 }
 
 /** @brief Send a message to a specific peer by MAC address. */
@@ -128,6 +163,7 @@ void EyeSyncManager::onDataReceived(const esp_now_recv_info_t *esp_now_info, con
     memcpy(msg.macAddress, esp_now_info->src_addr, 6);
   }
 
+  s_instance->addPeer(msg.macAddress);
   s_instance->m_lastRemoteState = msg;
   s_instance->m_lastRemoteTime = millis();
 
@@ -156,6 +192,7 @@ void EyeSyncManager::onDataReceived(const uint8_t *mac, const uint8_t *data, int
   memcpy(&msg, data, sizeof(msg));
   memcpy(msg.macAddress, mac, 6);
 
+  s_instance->addPeer(mac);
   s_instance->m_lastRemoteState = msg;
   s_instance->m_lastRemoteTime = millis();
 

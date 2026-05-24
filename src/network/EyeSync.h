@@ -66,6 +66,16 @@ public:
   /** @brief Send a message to a specific peer by MAC. */
   bool sendTo(const uint8_t *mac, const EyeSyncMessage &msg);
 
+  /**
+   * @brief Register a peer by MAC for peer count tracking.
+   *
+   * Deduplicates against the existing list, then calls esp_now_add_peer()
+   * so the peer can receive unicast sends. Used internally by onDataReceived()
+   * to automatically register senders.
+   * @return true if the peer is known (newly added or already present).
+   */
+  bool addPeer(const uint8_t *mac);
+
   /** @brief Number of active ESP-NOW peers. */
   int getPeerCount() const;
 
