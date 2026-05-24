@@ -18,6 +18,7 @@
 #include "input/InputBase.h"
 #include "network/EyeSync.h"
 #include "eyes.h"
+#include <atomic>
 
 /**
  * @brief Central animation state machine for eye rendering.
@@ -173,6 +174,10 @@ private:
   uint32_t m_lastIrisChange = 0;           // Timestamp of last target change
   uint32_t m_irisHoldDuration = 3000;      // Hold time between changes (ms)
   uint32_t m_irisTransitionDuration = 800; // Transition duration (ms)
+
+  // Pending eye switch requested from Core 0; applied at the start of update() on Core 1.
+  // Value of -1 means no switch is pending.
+  std::atomic<int> m_pendingEyeIndex{-1};
 
   bool m_faceWasTracking = false; // True when face input had control last frame
   bool m_booped = false;          // True when boop expression is active

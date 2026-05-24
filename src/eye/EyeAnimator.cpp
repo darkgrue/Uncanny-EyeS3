@@ -99,19 +99,10 @@ void EyeAnimator::setPupilRange(float minPupil, float maxPupil)
 bool EyeAnimator::setEyeIndex(int index)
 {
   if (index < 0 || index >= s_eyeCount)
-  {
     return false;
-  }
-
-  m_eyeIndex = index;
-  m_eyeDef = s_eyeRegistry[index];
-
-  if (!m_renderer.begin(m_display, *m_eyeDef))
-  {
-    return false;
-  }
-
-  m_needsRender = true;
+  // Store the request; the actual switch is applied at the top of update()
+  // on Core 1 to avoid a race with renderFrame() running on the same core.
+  m_pendingEyeIndex.store(index, std::memory_order_relaxed);
   return true;
 }
 
@@ -130,6 +121,17 @@ void EyeAnimator::update(uint32_t now)
 {
   if (!m_initialized)
     return;
+
+  // Apply any eye switch requested by Core 0 (serial command handler).
+  // Runs here, on Core 1, so it cannot race with renderFrame().
+  int pending = m_pendingEyeIndex.exchange(-1, std::memory_order_relaxed);
+  if (pending >= 0 && pending < s_eyeCount)
+  {
+    m_eyeIndex = pending;
+    m_eyeDef = s_eyeRegistry[pending];
+    m_renderer.begin(m_display, *m_eyeDef);
+    m_needsRender = true;
+  }
 
   if (m_input)
     m_input->update();
