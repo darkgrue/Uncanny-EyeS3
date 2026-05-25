@@ -137,6 +137,6 @@ namespace human_eye {
       { 0.5, { nullptr, 0, 0 }, 65281, 0, 0, 0, 0 },
       { { nullptr, 0, 0 }, 65535, 0, 0, 0, 0 },
       { upper, lower, 0, 0.2, 0.0 },
-      { 240, nullptr, nullptr }
+      { 233, nullptr, nullptr }
   };
 }  // namespace
