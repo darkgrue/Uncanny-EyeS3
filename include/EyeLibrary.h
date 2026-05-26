@@ -2,22 +2,28 @@
 
 #if defined(ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED)
 
+#include "eyes/anime_466.h"
 #include "eyes/default_eye_466.h"
+#include "eyes/dragon_466.h"
 #include "eyes/eagle_466.h"
-#include "eyes/human_eye_466.h"
+#include "eyes/hazel_466.h"
+#include "eyes/leopard_466.h"
 
 /**
  * @brief Registry of available eye definitions for AMOLED boards.
  */
 static const EyeDefinition *const s_eyeRegistry[] = {
+    &anime::eye,
     &default_eye::eye,
+    &dragon::eye,
     &eagle::eye,
-    &human_eye::eye};
+    &hazel::eye,
+    &leopard::eye};
 
 /**
  * @brief Number of eyes in the registry.
  */
-static constexpr int s_eyeCount = 3;
+static constexpr int s_eyeCount = 6;
 
 /**
  * @brief Get the name of an eye by index.
@@ -33,22 +39,28 @@ inline const char *getEyeName(int index)
 
 #elif defined(ARDUINO_LILYGO_T_RGB)
 
+#include "eyes/anime_480.h"
 #include "eyes/default_eye_480.h"
+#include "eyes/dragon_480.h"
 #include "eyes/eagle_480.h"
-#include "eyes/human_eye_480.h"
+#include "eyes/hazel_480.h"
+#include "eyes/leopard_480.h"
 
 /**
  * @brief Registry of available eye definitions for T-RGB boards.
  */
 static const EyeDefinition *const s_eyeRegistry[] = {
+    &anime::eye,
     &default_eye::eye,
+    &dragon::eye,
     &eagle::eye,
-    &human_eye::eye};
+    &hazel::eye,
+    &leopard::eye};
 
 /**
  * @brief Number of eyes in the registry.
  */
-static constexpr int s_eyeCount = 3;
+static constexpr int s_eyeCount = 6;
 
 /**
  * @brief Get the name of an eye by index.

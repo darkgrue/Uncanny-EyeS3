@@ -134,11 +134,11 @@ namespace default_eye {
   };
 
   const EyeDefinition eye PROGMEM = {
-      "default_eye", 0.5, 0, true, 0, nullptr,
-      { 0, 0, 0.35, 1.67 },
-      { 0.5, { nullptr, 0, 0 }, 65281, 0, 0, 0, 0 },
+      "default_eye", 0.5, 0, 0, nullptr,
+      { 0, 0.0, 0.35, 0.8 },
+      { 0.5, { nullptr, 0, 0 }, 31, 0, 0, 0, 0 },
       { { nullptr, 0, 0 }, 65535, 0, 0, 0, 0 },
-      { upper, lower, 0, 0.25, 0.0 },
+      { upper, lower, 0, 0.25, 0.0, true },
       { 240, nullptr, nullptr }
   };
 }  // namespace
