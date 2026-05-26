@@ -111,6 +111,13 @@ def generate_no_eyelids(screen_width: int) -> list:
 MAX_TEX_W = 256
 MAX_TEX_H = 128
 
+# Estimated DRAM available for lookup-table caches at runtime.
+# Angle map + radius map = map_radius² × 2 bytes (uint8_t each).
+# Textures = (iris_w × iris_h + sclera_w × sclera_h) × 2 bytes (uint16_t).
+# EyeRenderer.begin() falls back to PSRAM when DRAM allocation fails, so
+# exceeding this triggers a build-time warning rather than a hard error.
+DRAM_BUDGET_BYTES = 170 * 1024
+
 
 def convert_texture_to_rgb565(
     image_path: Path,
@@ -384,6 +391,19 @@ def generate_header(config: dict, eye_file: Path, output_path: Path, screen_size
         'filename', iris_cfg, 'iris')
     sclera_tex_data, sclera_tex_w, sclera_tex_h = _load_texture(
         'filename', sclera_cfg, 'sclera')
+
+    # DRAM budget check: warn when combined cache would exceed available DRAM.
+    # Maps are uint8_t (1 byte/pixel); textures are uint16_t (2 bytes/pixel).
+    map_cache_bytes = map_radius * map_radius * 2   # two uint8_t maps (angle + radius), 1 byte each
+    tex_cache_bytes = (iris_tex_w * iris_tex_h + sclera_tex_w * sclera_tex_h) * 2
+    total_cache_bytes = map_cache_bytes + tex_cache_bytes
+    if total_cache_bytes > DRAM_BUDGET_BYTES:
+        print(f"  Warning [{eye_file.name} @ {screen_size}px]: DRAM cache estimate "
+              f"{total_cache_bytes // 1024} KB exceeds {DRAM_BUDGET_BYTES // 1024} KB budget — "
+              f"texture(s) may fall back to PSRAM")
+        print(f"    maps={map_cache_bytes // 1024} KB  "
+              f"iris={iris_tex_w * iris_tex_h * 2 // 1024} KB  "
+              f"sclera={sclera_tex_w * sclera_tex_h * 2 // 1024} KB")
 
     # ---- Assemble header ----
     lines = ['#pragma once', '']
