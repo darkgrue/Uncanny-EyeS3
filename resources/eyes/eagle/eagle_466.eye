@@ -1,25 +1,26 @@
 {
     "name": "eagle_eye",
     "radiusFraction": 0.5,
-    "backColor": 31759,
-    "tracking": true,
+    "backColor": 0,
     "squint": 0,
     "pupil": {
         "color": 0,
         "slitRadius": 0,
         "minFraction": 0.35,
-        "maxFraction": 1.67
+        "maxFraction": 0.8
     },
     "iris": {
         "radiusFraction": 0.5,
-        "filename": "eagle_iris_466.png",
-        "color": 65281,
+        "filename": "iris.png",
+        "color": 65224,
         "angle": 0,
         "spin": 0,
         "mirror": false
     },
     "sclera": {
-        "filename": "eagle_sclera_466.png",
+        "filename": "sclera.png",
+        "maxTexW": 128,
+        "maxTexH": 64,
         "color": 65535,
         "angle": 0,
         "spin": 0,
@@ -30,6 +31,7 @@
         "upperFilename": "upper_466.png",
         "lowerFilename": "lower_466.png",
         "normalClosure": 0.3,
-        "wideClosure": 0.0
+        "wideClosure": 0.0,
+        "tracking": true
     }
 }
