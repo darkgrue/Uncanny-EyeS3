@@ -33,7 +33,9 @@ bool EyeAnimator::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
 
   m_normalClosure = eyeDef.eyelid.normalClosure;
   m_wideClosure = eyeDef.eyelid.wideClosure;
-  
+
+  setPupilRange(eyeDef.pupil.minFraction, eyeDef.pupil.maxFraction);
+  m_irisCenter = 0.5f;
 
   m_blink.setNormalGap(m_normalClosure);
   m_blink.normal();
@@ -43,9 +45,6 @@ bool EyeAnimator::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
     return false;
   }
 
-  m_movement.setBounds(0.6f);
-  m_movement.setRandomDuration(250, 500);
-  m_movement.setSaccadeDelay(4000);
   m_movement.setRandomMode(true);
 
   for (int i = 0; i < IRIS_LEVELS; i++)
@@ -130,6 +129,8 @@ void EyeAnimator::update(uint32_t now)
     m_eyeIndex = pending;
     m_eyeDef = s_eyeRegistry[pending];
     m_renderer.begin(m_display, *m_eyeDef);
+    setPupilRange(m_eyeDef->pupil.minFraction, m_eyeDef->pupil.maxFraction);
+    m_irisCenter = 0.5f;
     m_needsRender = true;
   }
 
@@ -184,8 +185,12 @@ void EyeAnimator::update(uint32_t now)
     }
     else if (wasJoystick)
     {
-      // Joystick just returned to deadzone — resume autonomous saccades.
-      m_movement.setTargetLost();
+      // Joystick released — animate to center then resume autonomous saccades.
+      // moveTo() sets m_moving=true first so setRandomMode() doesn't fire startRandomMove()
+      // immediately from the current off-center position.
+      // Use a short post-move idle so random saccades resume quickly after centering.
+      m_movement.setPostMoveIdle(EYE_MOVE_SACCADE_DELAY);
+      m_movement.moveTo(0.0f, 0.0f, 400);
       m_movement.setRandomMode(true);
     }
   }
@@ -237,15 +242,26 @@ void EyeAnimator::update(uint32_t now)
 
   m_blink.update();
 
+  // Capture the last wide-animation iris value before autonomous overwrites it.
+  // m_currentIris still holds the previous frame's value at this point.
+  if (m_wideJustDeactivated)
+  {
+    m_pupilReleaseFrom  = m_currentIris;
+    m_pupilReleaseStart = now;
+    m_pupilReleasing    = true;
+    m_wideJustDeactivated = false;
+  }
+
   if (m_lightSensorPin >= 0)
   {
+    // Update m_irisCenter from the sensor; the oscillation (hippus) runs below.
     updateLightSensor(now);
   }
-  else if (m_remotePupilFactor < 0.0f)
+  if (m_remotePupilFactor < 0.0f)
   {
-    // Only run autonomous iris when not mirroring a controller. Suppressing it
-    // here prevents the accumulating autonomous value from bleeding through on
-    // any frame where network data arrives slightly late.
+    // Compute m_currentIris as oscillation around m_irisCenter.
+    // With a light sensor, m_irisCenter tracks the sensor value;
+    // without one, m_irisCenter stays at 0.5 (midpoint of the pupil range).
     updateIrisAutonomous(now);
   }
 
@@ -253,7 +269,25 @@ void EyeAnimator::update(uint32_t now)
     m_currentIris = m_remotePupilFactor;
 
   if (m_wideActive)
-    m_currentIris = m_irisMin; // fully dilated pupils while wide
+  {
+    if (m_wideJustActivated)
+    {
+      m_pupilAnimFrom   = m_currentIris;
+      m_pupilAnimStart  = now;
+      m_wideJustActivated = false;
+    }
+    float t     = constrain((float)(now - m_pupilAnimStart) / (float)PUPIL_WIDE_DURATION, 0.0f, 1.0f);
+    float eased = t * t * (3.0f - 2.0f * t);
+    m_currentIris = m_pupilAnimFrom + (m_irisMin - m_pupilAnimFrom) * eased;
+  }
+  else if (m_pupilReleasing)
+  {
+    float t     = constrain((float)(now - m_pupilReleaseStart) / (float)PUPIL_RELEASE_DURATION, 0.0f, 1.0f);
+    float eased = t * t * (3.0f - 2.0f * t);
+    m_currentIris = m_pupilReleaseFrom + (m_currentIris - m_pupilReleaseFrom) * eased;
+    if (t >= 1.0f)
+      m_pupilReleasing = false;
+  }
 
   if (m_booped)
   {
@@ -313,11 +347,12 @@ bool EyeAnimator::broadcastState()
 }
 
 /**
- * @brief Poll the light sensor ADC and update the pupil factor.
+ * @brief Poll the light sensor ADC and update the hippus center position.
  *
  * Throttled to 10 Hz maximum. Normalizes the raw ADC value to 0.0-1.0
- * using the configured min/max, applies the power curve, and maps to the
- * iris range to produce the final pupil factor.
+ * using the configured min/max, applies the power curve, and stores the
+ * result in m_irisCenter so the hippus oscillation (updateIrisAutonomous)
+ * can orbit around the sensor-derived position.
  */
 void EyeAnimator::updateLightSensor(uint32_t now)
 {
@@ -334,17 +369,18 @@ void EyeAnimator::updateLightSensor(uint32_t now)
   float normalized = (float)(raw - m_lightMin) / (float)(m_lightMax - m_lightMin);
   normalized = pow(normalized, m_lightCurve);
 
-  m_currentIris = m_irisMin + normalized * m_irisRange;
+  m_irisCenter = normalized; // hippus oscillates around this normalized position
   m_lastLightRead = now;
 }
 
 /**
- * @brief Autonomous iris animation mimicking human pupillary unrest.
+ * @brief Autonomous iris animation mimicking human pupillary unrest (hippus).
  *
- * Generates new target pupil sizes at 2-5 second intervals using a
- * lognormal distribution, then smoothly transitions over 600-1000ms
- * using smoothstep easing. Keeps the iris in a valid 0.3-0.7 range
- * centered around 0.5 when no light sensor is present.
+ * Generates new target offsets at 2-5 second intervals using a zero-mean
+ * normal distribution, then smoothly transitions over 600-1000ms using
+ * smoothstep easing. The oscillation is centered at m_irisCenter (normalized
+ * 0-1 within the pupil range): 0.5 = midpoint of range when no sensor is
+ * present; sensor-derived value when a light sensor is active.
  */
 void EyeAnimator::updateIrisAutonomous(uint32_t now)
 {
@@ -352,22 +388,19 @@ void EyeAnimator::updateIrisAutonomous(uint32_t now)
 
   if (dt >= m_irisHoldDuration)
   {
-    // Save current smooth value as the starting point for the new transition.
     m_irisPrev[0] = m_irisSmooth;
 
     float u1 = (float)random(0, 1000) / 1000.0f;
     float u2 = (float)random(0, 1000) / 1000.0f;
 
     float normalSample = sqrt(-2.0f * log(u1 + 0.0001f)) * cos(2.0f * PI * u2);
-    float lognormalSample = normalSample * 0.3f - 0.1f;
+    m_irisTarget = constrain(normalSample * IRIS_AMPLITUDE_SCALE, -IRIS_AMPLITUDE_MAX, IRIS_AMPLITUDE_MAX);
 
-    m_irisTarget = constrain(lognormalSample, -0.3f, 0.3f);
-
-    m_irisHoldDuration = 2000 + random(0, 3000);
-    m_irisTransitionDuration = 600 + random(0, 400);
+    m_irisHoldDuration       = random(IRIS_HOLD_MIN, IRIS_HOLD_MAX);
+    m_irisTransitionDuration = random(IRIS_TRANSITION_MIN, IRIS_TRANSITION_MAX);
 
     m_lastIrisChange = now;
-    dt = 0; // Reset so the transition calculation below starts from 0.
+    dt = 0;
   }
 
   float t = (float)dt / (float)m_irisTransitionDuration;
@@ -377,10 +410,8 @@ void EyeAnimator::updateIrisAutonomous(uint32_t now)
 
   m_irisSmooth = m_irisPrev[0] + (m_irisTarget - m_irisPrev[0]) * eased;
 
-  float sum = 0.5f + m_irisSmooth;
-  sum = constrain(sum, 0.3f, 0.7f);
-
-  m_currentIris = m_irisMin + (sum * m_irisRange);
+  float sum = constrain(m_irisCenter + m_irisSmooth, 0.0f, 1.0f);
+  m_currentIris = m_irisMin + sum * m_irisRange;
 }
 
 /**
@@ -413,7 +444,10 @@ void EyeAnimator::processNetworkInput()
     // smoother from the last remote value so there is no visible jump.
     if (m_remotePupilFactor >= 0.0f)
     {
-      m_irisSmooth = constrain((m_remotePupilFactor - m_irisMin) / m_irisRange - 0.5f, -0.3f, 0.3f);
+      // Seed the oscillation smoother from the last remote value so there is no
+      // visible jump. m_irisCenter stays at 0.5 (midpoint) or sensor value.
+      float normalized = (m_irisRange > 0.0f) ? (m_remotePupilFactor - m_irisMin) / m_irisRange : 0.5f;
+      m_irisSmooth = constrain(normalized - m_irisCenter, -0.3f, 0.3f);
       m_irisPrev[0] = m_irisSmooth;
       m_lastIrisChange = millis();
     }
@@ -429,6 +463,8 @@ void EyeAnimator::processNetworkInput()
 
   if ((now - m_sync->getLastRemoteTime()) < 250)
   {
+    m_networkWasStale = false;
+
     EyeSyncMessage msg = m_sync->getLastRemoteState();
 
     m_movement.setCurrentPosition(msg.eyeX, msg.eyeY);
@@ -471,8 +507,14 @@ void EyeAnimator::processNetworkInput()
     // than handing off to the autonomous iris — that hand-off would produce a
     // visible twitch on brief WiFi gaps. The pupil reverts to autonomous only
     // when hasController() becomes false (pruneDropped timeout).
-    m_remoteBlinkFactor = -1.0f;
-    m_movement.setTargetLost();
-    m_movement.setRandomMode(true);
+    // Only apply the transition once; repeating it every frame would keep
+    // resetting m_lastTrackTime and prevent the idle delay from counting up.
+    if (!m_networkWasStale)
+    {
+      m_networkWasStale   = true;
+      m_remoteBlinkFactor = -1.0f;
+      m_movement.setTargetLost();
+      m_movement.setRandomMode(true);
+    }
   }
 }

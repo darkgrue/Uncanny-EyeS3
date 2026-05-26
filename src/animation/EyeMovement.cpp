@@ -14,8 +14,8 @@
 
 EyeMovement::EyeMovement()
 {
-  m_currentX = 0.5f;
-  m_currentY = 0.5f;
+  m_currentX = 0.0f;
+  m_currentY = 0.0f;
   m_startX = m_currentX;
   m_startY = m_currentY;
   m_targetX = m_currentX;
@@ -50,6 +50,7 @@ void EyeMovement::setTarget(float x, float y)
 void EyeMovement::setTargetLost()
 {
   m_lastTrackTime = millis();
+  m_moveDuration = m_saccadeDelayAfterTrack;
   m_idle = true;
 }
 
@@ -63,12 +64,14 @@ void EyeMovement::setRandomDuration(uint32_t minMs, uint32_t maxMs)
 /**
  * @brief Enable or disable autonomous random movement mode.
  *
- * When enabled and not already moving, immediately starts a random saccade.
+ * When enabled, starts a random saccade immediately only if not already
+ * moving and not in an idle fixation pause. If the idle pause is active,
+ * it is left intact and will expire naturally via update().
  */
 void EyeMovement::setRandomMode(bool enabled)
 {
   m_randomMode = enabled;
-  if (enabled && !m_moving)
+  if (enabled && !m_moving && !m_idle)
   {
     startRandomMove();
   }
@@ -101,15 +104,15 @@ void EyeMovement::startRandomMove()
   float targetX = m_currentX + cos(angle) * amplitude;
   float targetY = m_currentY + sin(angle) * amplitude;
 
-  float distX = m_currentX - 0.5f;
-  float distY = m_currentY - 0.5f;
+  float distX = m_currentX;
+  float distY = m_currentY;
   float currentDist = sqrt(distX * distX + distY * distY);
 
   float centerBias = currentDist * EYE_MOVE_CENTER_BIAS_FACTOR;
   centerBias = constrain(centerBias, 0.0f, EYE_MOVE_CENTER_BIAS_MAX);
 
-  float biasedTargetX = 0.5f + (targetX - 0.5f) * (1.0f - centerBias);
-  float biasedTargetY = 0.5f + (targetY - 0.5f) * (1.0f - centerBias);
+  float biasedTargetX = targetX * (1.0f - centerBias);
+  float biasedTargetY = targetY * (1.0f - centerBias);
 
   m_targetX = biasedTargetX;
   m_targetY = biasedTargetY;
@@ -210,14 +213,15 @@ static float saccadeEasing(float t)
  */
 bool EyeMovement::update()
 {
+  uint32_t now = millis();
+
   if (!m_moving)
   {
     if (m_randomMode)
     {
       if (m_idle)
       {
-        uint32_t now = millis();
-        if (now - m_lastTrackTime >= m_saccadeDelayAfterTrack)
+        if (now - m_lastTrackTime >= m_moveDuration)
         {
           m_idle = false;
           startRandomMove();
@@ -232,7 +236,6 @@ bool EyeMovement::update()
     return false;
   }
 
-  uint32_t now = millis();
   uint32_t elapsed = now - m_moveStartTime;
 
   if (elapsed >= m_moveDuration)
@@ -245,8 +248,15 @@ bool EyeMovement::update()
     {
       m_idle = true;
       m_lastTrackTime = now;
-      m_moveDuration = random(EYE_MOVE_FIXATION_PAUSE_MIN, EYE_MOVE_FIXATION_PAUSE_MAX);
-      m_moveStartTime = now;
+      if (m_postMoveIdleMs > 0)
+      {
+        m_moveDuration = m_postMoveIdleMs;
+        m_postMoveIdleMs = 0;
+      }
+      else
+      {
+        m_moveDuration = random(EYE_MOVE_FIXATION_PAUSE_MIN, EYE_MOVE_FIXATION_PAUSE_MAX);
+      }
     }
     return true;
   }

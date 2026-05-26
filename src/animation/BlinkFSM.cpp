@@ -68,14 +68,16 @@ void BlinkFSM::wideTo(float gap)
 void BlinkFSM::setNormalGap(float gap)
 {
   m_targetGap = gap;
+  if (m_state == NOBLINK)
+    m_factor = gap;
 }
 
 void BlinkFSM::normal()
 {
   if (m_state == FORCINGNORMAL)
     return; // already animating back to normal
-  if (!m_forced && m_state == NOBLINK)
-    return; // already at rest, nothing to do
+  if (!m_forced)
+    return; // only exit forced states; autonomous blinks must not be interrupted
   m_forced = true; // hold off auto-blink while the transition plays out
   m_forceStart = m_factor;
   m_forceTarget = m_targetGap;
@@ -170,11 +172,11 @@ bool BlinkFSM::update()
 
       if (m_state == ENBLINK)
       {
-        m_factor = t;
+        m_factor = m_targetGap + (1.0f - m_targetGap) * t;
       }
       else
       {
-        m_factor = 1.0f - t;
+        m_factor = 1.0f - (1.0f - m_targetGap) * t;
       }
     }
     return true;

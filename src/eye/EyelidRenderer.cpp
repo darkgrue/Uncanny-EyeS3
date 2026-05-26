@@ -33,189 +33,146 @@ void EyelidRenderer::begin(int displaySize, uint16_t eyeRadius, const EyelidConf
   m_eyeRadius = eyeRadius;
   m_config = &config;
 
-  m_hasCustomEyelids = (config.upper != nullptr && config.lower != nullptr);
   m_eyelidColor = config.color;
 
-  // Compute normal gap from normalClosure (gap = 1.0 - closure)
+  // Detect real custom eyelid data: any column with a non-sentinel inner edge.
+  // generate_no_eyelids() fills (0,0) sentinels; real tables have values in 1-254.
+  m_hasCustomEyelids = false;
+  if (config.upper != nullptr && config.lower != nullptr)
+  {
+    for (int col = 0; col < m_displaySize; col++)
+    {
+      uint8_t upperEnd   = config.upper[col * 2 + 1];
+      uint8_t lowerStart = config.lower[col * 2];
+      if ((upperEnd != 0 && upperEnd != 255) || (lowerStart != 0 && lowerStart != 255))
+      {
+        m_hasCustomEyelids = true;
+        break;
+      }
+    }
+  }
+
   float normalGap = 1.0f - config.normalClosure;
 
-  m_smoothedUpperFactor = normalGap;
-  m_smoothedLowerFactor = normalGap;
-  m_prevUpperY = 0.5f - (normalGap * 0.5f);
-  m_prevLowerY = 0.5f + (normalGap * 0.5f);
+  // Tracking offsets start at zero; blink position is applied directly each frame.
+  m_prevUpperY = 0.0f;
+  m_prevLowerY = 0.0f;
+  m_smoothedUpperFactor = 0.5f - normalGap * 0.5f;
+  m_smoothedLowerFactor = 0.5f + normalGap * 0.5f;
 }
 
 /**
- * @brief Compute the normalized Y position of the upper eyelid.
+ * @brief Compute smoothed eyelid factors from eye position and blink gap.
  *
- * Base position is centered around 0.5 with the gap applied symmetrically.
- * When tracking is enabled, looking upward shifts the upper lid downward
- * by a fraction of the eye Y position.
+ * Applies squint, advances exponential tracking smoothing, and computes
+ * m_smoothedUpperFactor / m_smoothedLowerFactor. Stores the eye center so
+ * drawEyelids() can paint without re-deriving it. Call before the main
+ * render loop so getUpperRow()/getLowerRow() are valid for row skipping.
  */
-float EyelidRenderer::calculateUpperLidY(float eyeY, float gap)
-{
-  float baseUpperY = 0.5f - (gap * 0.5f);
-  if (m_trackingEnabled)
-  {
-    baseUpperY += -eyeY * EYELID_UPPER_TRACK_STRENGTH * 0.5f;
-  }
-  return baseUpperY;
-}
-
-/**
- * @brief Compute the normalized Y position of the lower eyelid.
- *
- * Base position is centered around 0.5 with the gap applied symmetrically.
- * When tracking is enabled, looking downward shifts the lower lid upward
- * by a fraction of the eye Y position.
- */
-float EyelidRenderer::calculateLowerLidY(float eyeY, float gap)
-{
-  float baseLowerY = 0.5f + (gap * 0.5f);
-  if (m_trackingEnabled)
-  {
-    baseLowerY += -eyeY * EYELID_LOWER_TRACK_STRENGTH * 0.5f;
-  }
-  return baseLowerY;
-}
-
-/**
- * @brief Render eyelids into the frame buffer.
- *
- * Applies squint modifier to the eyelid gap if enabled, computes target
- * Y positions with optional smoothstep easing, applies exponential
- * smoothing, then delegates to either custom eyelid rendering or the
- * default curved boundary renderer.
- */
-void EyelidRenderer::render(float eyeX, float eyeY, float eyelidGap, uint16_t *frameBuffer)
+void EyelidRenderer::prepareFactors(float eyeX, float eyeY, float eyelidGap)
 {
   if (m_squint)
-  {
     eyelidGap *= EYELID_SQUINT_FACTOR;
-  }
 
-  float targetUpperY = calculateUpperLidY(eyeY, eyelidGap);
-  float targetLowerY = calculateLowerLidY(eyeY, eyelidGap);
+  // Smooth only the tracking offsets — BlinkFSM already eases the blink factor,
+  // so re-smoothing it here would prevent the eyelids from ever fully closing.
+  float targetUpperTracking = m_trackingEnabled ? -eyeY * EYELID_UPPER_TRACK_STRENGTH * 0.5f : 0.0f;
+  float targetLowerTracking = m_trackingEnabled ? -eyeY * EYELID_LOWER_TRACK_STRENGTH * 0.5f : 0.0f;
 
-#if BLINK_USE_SMOOTHSTEP
-  constexpr float smoothK = 3.0f;
-  auto smoothstep = [](float t)
-  {
-    t = (t < 0.0f) ? 0.0f : (t > 1.0f) ? 1.0f
-                                       : t;
-    return t * t * (3.0f - 2.0f * t);
-  };
-  targetUpperY = smoothstep(targetUpperY);
-  targetLowerY = smoothstep(targetLowerY);
-  (void)smoothK;
-#else
-  (void)0;
-#endif
+  m_prevUpperY += (targetUpperTracking - m_prevUpperY) * EYELID_SMOOTHING;
+  m_prevLowerY += (targetLowerTracking - m_prevLowerY) * EYELID_SMOOTHING;
 
-  float upperDelta = targetUpperY - m_prevUpperY;
-  float lowerDelta = targetLowerY - m_prevLowerY;
+  // Center the eyelid base at the eye's vertical screen position when tracking.
+  // Default (procedural) eyelids use m_smoothedUpperFactor/m_smoothedLowerFactor
+  // as absolute screen-row fractions, so they must follow the eye center.
+  // Custom eyelids render relative to the circle boundary; eyeYBase cancels
+  // in smoothGap (lower - upper), so their output is unaffected.
+  float eyeYBase = 0.5f + (m_trackingEnabled ? eyeY * 0.25f : 0.0f);
 
-  float upperStep = upperDelta * EYELID_SMOOTHING;
-  float lowerStep = lowerDelta * EYELID_SMOOTHING;
+  // Scale tracking by eyelidGap so tracking vanishes at full closure.
+  // This prevents the asymmetric upper/lower tracking strengths from leaving
+  // a gap between the eyelids when the eye is looking up or down and blinking.
+  m_smoothedUpperFactor = eyeYBase - eyelidGap * 0.5f + m_prevUpperY * eyelidGap;
+  m_smoothedLowerFactor = eyeYBase + eyelidGap * 0.5f + m_prevLowerY * eyelidGap;
 
-  m_smoothedUpperFactor = m_prevUpperY + upperStep;
-  m_smoothedLowerFactor = m_prevLowerY + lowerStep;
+  m_eyeCenterX = m_displaySize / 2 + (int)(eyeX * (m_displaySize / 4));
+  m_eyeCenterY = m_displaySize / 2 + (int)(eyeY * (m_displaySize / 4));
+}
 
-  m_prevUpperY = m_smoothedUpperFactor;
-  m_prevLowerY = m_smoothedLowerFactor;
-
-  int centerX = m_displaySize / 2;
-  int centerY = m_displaySize / 2;
-  int offsetX = (int)(eyeX * (m_displaySize / 4));
-  int offsetY = (int)(eyeY * (m_displaySize / 4));
-  int eyeCenterX = centerX + offsetX;
-  int eyeCenterY = centerY + offsetY;
-
+/**
+ * @brief Paint eyelid pixels into the frame buffer.
+ *
+ * Dispatches to custom or default eyelid renderer using factors and eye
+ * center computed by the preceding prepareFactors() call.
+ */
+void EyelidRenderer::drawEyelids(uint16_t *frameBuffer)
+{
   if (m_hasCustomEyelids && m_config != nullptr)
   {
-    renderCustomEyelids(eyelidGap, eyeCenterX, eyeCenterY, frameBuffer, m_displaySize, m_eyelidColor);
+    float smoothGap = m_smoothedLowerFactor - m_smoothedUpperFactor;
+    renderCustomEyelids(smoothGap, m_eyeCenterX, m_eyeCenterY, frameBuffer, m_displaySize, m_eyelidColor);
   }
   else
   {
-    float upperYNorm = m_smoothedUpperFactor;
-    float lowerYNorm = m_smoothedLowerFactor;
-    renderDefaultEyelids(eyeCenterX, eyeCenterY, upperYNorm, lowerYNorm, frameBuffer, m_displaySize, m_eyelidColor);
+    renderDefaultEyelids(m_eyeCenterX, m_eyeCenterY, m_smoothedUpperFactor, m_smoothedLowerFactor,
+                         frameBuffer, m_displaySize, m_eyelidColor);
   }
 }
 
+/** @brief Convenience wrapper: prepareFactors() then drawEyelids(). */
+void EyelidRenderer::render(float eyeX, float eyeY, float eyelidGap, uint16_t *frameBuffer)
+{
+  prepareFactors(eyeX, eyeY, eyelidGap);
+  drawEyelids(frameBuffer);
+}
+
 /**
- * @brief Render default curved arc eyelids using math-based boundary.
+ * @brief Render default eyelids as circular segments.
  *
- * Iterates pixels within the eye's circular bounding box. For each pixel
- * above the upper boundary or below the lower boundary, tests whether it
- * falls within the curved eyelid shape (using normalized distance from center)
- * and fills with the eyelid color if so.
+ * Paints all pixels within the eye circle that are at or above upperY or
+ * at or below lowerY (both expressed as normalized display positions 0–1).
+ * Inclusive row bounds ensure the boundary row is always covered, so
+ * upperY==lowerY (full closure) leaves no gap.
  */
 void EyelidRenderer::renderDefaultEyelids(int centerX, int centerY, float upperY, float lowerY,
                                           uint16_t *buffer, int size, uint16_t color)
 {
+  // upperY/lowerY are normalized display positions (0.0=top, 1.0=bottom).
+  // Convert to absolute pixel rows; use inclusive bounds so the boundary row
+  // is always painted and upperYPos==lowerYPos (full closure) leaves no gap.
   int upperYPos = (int)(upperY * size);
   int lowerYPos = (int)(lowerY * size);
   int eyeRadius = m_eyeRadius;
+  int eyeRadiusSq = eyeRadius * eyeRadius;
 
   int minY = centerY - eyeRadius;
   int maxY = centerY + eyeRadius;
   int minX = centerX - eyeRadius;
   int maxX = centerX + eyeRadius;
 
-  if (minY < 0)
-    minY = 0;
-  if (maxY >= size)
-    maxY = size - 1;
-  if (minX < 0)
-    minX = 0;
-  if (maxX >= size)
-    maxX = size - 1;
-
-  int eyeRadiusSq = eyeRadius * eyeRadius;
-
-  float cornerPinch = 0.35f;
-  float cornerY = upperY + (lowerY - upperY) * cornerPinch;
-  (void)cornerPinch;
-  int cornerYPos = (int)(cornerY * size);
-  (void)cornerYPos;
-  float invRadius = 1.0f / (float)eyeRadius;
-  (void)cornerY;
+  if (minY < 0)   minY = 0;
+  if (maxY >= size) maxY = size - 1;
+  if (minX < 0)   minX = 0;
+  if (maxX >= size) maxX = size - 1;
 
   for (int y = minY; y <= maxY; y++)
   {
-    int dy = y - centerY;
-    int dySq = dy * dy;
-    bool aboveUpper = (y < upperYPos);
-    bool belowLower = (y > lowerYPos);
+    // Inclusive bounds: boundary row belongs to the nearer eyelid, ensuring
+    // full closure when upperYPos == lowerYPos.
+    bool aboveUpper = (y <= upperYPos);
+    bool belowLower = (y >= lowerYPos);
     if (!aboveUpper && !belowLower)
       continue;
+
+    int dy = y - centerY;
+    int dySq = dy * dy;
 
     for (int x = minX; x <= maxX; x++)
     {
       int dx = x - centerX;
-      int distSq = dx * dx + dySq;
-      if (distSq > eyeRadiusSq)
+      if (dx * dx + dySq > eyeRadiusSq)
         continue;
-
-      bool occluded = false;
-      if (aboveUpper)
-      {
-        float centerToY = (float)dy * invRadius;
-        float lidBoundary = (upperY - 0.5f) * 2.0f;
-        occluded = centerToY < lidBoundary;
-      }
-      else if (belowLower)
-      {
-        float centerToY = (float)dy * invRadius;
-        float lidBoundary = (lowerY - 0.5f) * 2.0f;
-        occluded = centerToY > lidBoundary;
-      }
-
-      if (occluded)
-      {
-        buffer[y * size + x] = color;
-      }
+      buffer[y * size + x] = __builtin_bswap16(color);
     }
   }
 }
@@ -223,62 +180,91 @@ void EyelidRenderer::renderDefaultEyelids(int centerX, int centerY, float upperY
 /**
  * @brief Render custom eyelid shapes from the eye definition table.
  *
- * Uses per-column (startY, endY) pairs stored in the EyelidConfig.
- * Values of 255 indicate "no custom data" � falls back to a procedural
- * boundary based on blinkFactor. Otherwise, eyelid edges are computed
- * by scaling the table values by the current eye size.
+ * Table format per column: upper=(outer_top, inner_bottom), lower=(outer_bottom, inner_top),
+ * all scaled 0-255. (0,0) sentinel means no eyelid data for that column.
+ *
+ * For each column within the eye circle, paints eyelid color between the circle
+ * boundary and the inner eyelid edge, interpolated by eyelidGap:
+ *   eyelidGap=1.0 (open)   → eyelid edge at circle boundary → nothing painted
+ *   eyelidGap=0.0 (closed) → eyelid edge at table inner edge → full eyelid painted
  */
-void EyelidRenderer::renderCustomEyelids(float blinkFactor, int centerX, int centerY,
+void EyelidRenderer::renderCustomEyelids(float eyelidGap, int centerX, int centerY,
                                          uint16_t *buffer, int size, uint16_t color)
 {
   if (m_config == nullptr)
     return;
 
-  int effectiveUpper = (int)(blinkFactor * size * 0.5f);
-  int effectiveLower = size - effectiveUpper;
-  int mapWidth = size;
+  int eyeRadius   = m_eyeRadius;
+  int eyeRadiusSq = eyeRadius * eyeRadius;
+  float scale     = (float)size / 255.0f;
+  float gapClosed = 1.0f - eyelidGap;
 
-  for (int x = 0; x < mapWidth; x++)
+  for (int x = 0; x < size; x++)
   {
-    int tableIdx = x * 2;
-    uint8_t upperStart = 0, upperEnd = 0, lowerStart = 0, lowerEnd = 0;
+    int dx  = x - centerX;
+    int dxSq = dx * dx;
+    if (dxSq > eyeRadiusSq)
+      continue;
 
+    int dyMaxSq = eyeRadiusSq - dxSq;
+    int dyMax;
+    if (dyMaxSq <= 0)
+    {
+      dyMax = 0;
+    }
+    else
+    {
+      dyMax = eyeRadius;
+      dyMax = (dyMax + dyMaxSq / dyMax) / 2;
+      dyMax = (dyMax + dyMaxSq / dyMax) / 2;
+      dyMax = (dyMax + dyMaxSq / dyMax) / 2;
+    }
+
+    int circleTop    = centerY - dyMax;
+    int circleBottom = centerY + dyMax;
+    // Convert absolute screen column to eye-relative column for the table lookup.
+    // The table was generated for a centered eye; when the eye is off-center,
+    // screen column x maps to centered-eye column (x - eyeOffset).
+    int tableCol = x - centerX + m_displaySize / 2;
+    if (tableCol < 0 || tableCol >= m_displaySize)
+      continue;
+    int tableIdx = tableCol * 2;
+
+    // Upper eyelid: upper[col*2+1] = inner bottom edge (0 = no data for this column).
     if (m_config->upper != nullptr)
     {
-      upperStart = m_config->upper[tableIdx];
-      upperEnd = m_config->upper[tableIdx + 1];
+      uint8_t upperEnd = m_config->upper[tableIdx + 1];
+      if (upperEnd != 0)
+      {
+        int upperInnerY = (int)(upperEnd * scale);
+        int upperEdge   = circleTop + (int)(gapClosed * (float)(upperInnerY - circleTop));
+        if (upperEdge > circleTop)
+        {
+          int yTop = (circleTop < 0)    ? 0    : circleTop;
+          int yBot = (upperEdge > size) ? size : upperEdge;
+          uint16_t colorBE = __builtin_bswap16(color);
+          for (int y = yTop; y < yBot; y++)
+            buffer[y * size + x] = colorBE;
+        }
+      }
     }
+
+    // Lower eyelid: lower[col*2]=outer_bottom (0=no data), lower[col*2+1]=inner top edge.
     if (m_config->lower != nullptr)
     {
-      lowerStart = m_config->lower[tableIdx];
-      lowerEnd = m_config->lower[tableIdx + 1];
-    }
-
-    if (upperStart == 255 || upperEnd == 255)
-    {
-      upperStart = 0;
-      upperEnd = (uint8_t)(blinkFactor * size * 0.5f);
-    }
-    if (lowerStart == 255 || lowerEnd == 255)
-    {
-      lowerStart = (uint8_t)(size - blinkFactor * size * 0.5f);
-      lowerEnd = size;
-    }
-
-    int upperLidY = (int)centerY + (int)upperStart - (int)(effectiveUpper * (1.0f - (float)upperEnd / (float)size));
-    int lowerLidY = (int)centerY + (int)lowerStart - (int)((size - effectiveLower) * (1.0f - (float)lowerEnd / (float)size));
-
-    upperLidY = (upperLidY < 0) ? 0 : (upperLidY >= size) ? size - 1
-                                                          : upperLidY;
-    lowerLidY = (lowerLidY < 0) ? 0 : (lowerLidY >= size) ? size - 1
-                                                          : lowerLidY;
-
-    for (int y = upperLidY; y <= lowerLidY; y++)
-    {
-      if (y >= 0 && y < size)
+      uint8_t lowerStart = m_config->lower[tableIdx];
+      if (lowerStart != 0)
       {
-        int idx = y * size + x;
-        buffer[idx] = color;
+        int lowerInnerY = (int)(m_config->lower[tableIdx + 1] * scale);
+        int lowerEdge   = circleBottom - (int)(gapClosed * (float)(circleBottom - lowerInnerY));
+        if (lowerEdge < circleBottom)
+        {
+          int yTop = (lowerEdge    < 0)    ? 0    : lowerEdge;
+          int yBot = (circleBottom > size) ? size : circleBottom;
+          uint16_t colorBE = __builtin_bswap16(color);
+          for (int y = yTop; y < yBot; y++)
+            buffer[y * size + x] = colorBE;
+        }
       }
     }
   }

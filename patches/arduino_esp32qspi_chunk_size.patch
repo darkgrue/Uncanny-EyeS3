@@ -1,0 +1,21 @@
+--- a/GFX Library for Arduino/src/databus/Arduino_ESP32QSPI.h
++++ b/GFX Library for Arduino/src/databus/Arduino_ESP32QSPI.h
+@@ -8,7 +8,7 @@
+ #ifndef ESP32QSPI_MAX_PIXELS_AT_ONCE
+-#define ESP32QSPI_MAX_PIXELS_AT_ONCE 1024
++#define ESP32QSPI_MAX_PIXELS_AT_ONCE 16384
+ #endif
+ #ifndef ESP32QSPI_FREQUENCY
+ #define ESP32QSPI_FREQUENCY 40000000
+
+--- a/GFX Library for Arduino/src/databus/Arduino_ESP32QSPI.cpp
++++ b/GFX Library for Arduino/src/databus/Arduino_ESP32QSPI.cpp
+@@ -53,7 +53,7 @@
+     spi_bus_config_t buscfg = {
+         .mosi_io_num = _mosi,
+         .miso_io_num = _miso,
+         .sclk_io_num = _sck,
+         .quadwp_io_num = _quadwp,
+         .quadhd_io_num = _quadhd,
+-        .max_transfer_sz = (ESP32QSPI_MAX_PIXELS_AT_ONCE * 16) + 8,
++        .max_transfer_sz = (ESP32QSPI_MAX_PIXELS_AT_ONCE * 2) + 8,
