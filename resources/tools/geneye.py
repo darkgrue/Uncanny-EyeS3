@@ -135,11 +135,13 @@ def convert_texture_to_rgb565(
     img = Image.open(image_path).convert('RGB')
     w, h = img.size
 
-    if w > max_w or h > max_h:
-        scale = min(max_w / w, max_h / h)
-        w = max(1, int(w * scale))
-        h = max(1, int(h * scale))
-        img = img.resize((w, h), Image.LANCZOS)
+    # Cap each axis independently: angle and radius are orthogonal polar dimensions,
+    # so constraining one should not proportionally shrink the other.
+    new_w = min(w, max_w)
+    new_h = min(h, max_h)
+    if new_w != w or new_h != h:
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+    w, h = new_w, new_h
 
     pixels = img.load()
     data = []
