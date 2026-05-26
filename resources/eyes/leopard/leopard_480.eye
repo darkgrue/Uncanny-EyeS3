@@ -1,5 +1,5 @@
 {
-    "name": "eagle_eye",
+    "name": "leopard_eye",
     "radiusFraction": 0.5,
     "backColor": 0,
     "squint": 0,
@@ -13,16 +13,13 @@
         "radiusFraction": 0.5,
         "filename": "iris.png",
         "maxTexW": 256,
-        "maxTexH": 83,
-        "color": 65224,
+        "maxTexH": 115,
+        "color": 41736,
         "angle": 0,
         "spin": 0,
         "mirror": false
     },
     "sclera": {
-        "filename": "sclera.png",
-        "maxTexW": 128,
-        "maxTexH": 64,
         "color": 65535,
         "angle": 0,
         "spin": 0,

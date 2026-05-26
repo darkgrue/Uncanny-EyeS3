@@ -1,5 +1,5 @@
 {
-    "name": "eagle_eye",
+    "name": "hazel_eye",
     "radiusFraction": 0.5,
     "backColor": 0,
     "squint": 0,

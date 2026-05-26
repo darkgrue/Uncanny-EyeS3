@@ -1,29 +1,26 @@
 {
-    "name": "eagle_eye",
+    "name": "dragon_eye",
     "radiusFraction": 0.5,
     "backColor": 0,
     "squint": 0,
     "pupil": {
         "color": 0,
-        "slitRadius": 0,
-        "minFraction": 0.35,
+        "slitRadius": 0.5,
+        "minFraction": 0.25,
         "maxFraction": 0.8
     },
     "iris": {
         "radiusFraction": 0.5,
         "filename": "iris.png",
         "maxTexW": 256,
-        "maxTexH": 83,
+        "maxTexH": 115,
         "color": 65224,
         "angle": 0,
         "spin": 0,
         "mirror": false
     },
     "sclera": {
-        "filename": "sclera.png",
-        "maxTexW": 128,
-        "maxTexH": 64,
-        "color": 65535,
+        "color": 0,
         "angle": 0,
         "spin": 0,
         "mirror": false

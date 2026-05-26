@@ -12,6 +12,8 @@
     "iris": {
         "radiusFraction": 0.5,
         "filename": "iris.png",
+        "maxTexW": 256,
+        "maxTexH": 95,
         "color": 65224,
         "angle": 0,
         "spin": 0,
