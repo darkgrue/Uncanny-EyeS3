@@ -104,6 +104,11 @@ private:
   uint8_t  *m_angleMapCache   = nullptr; // DRAM copy of polar angle map
   uint8_t  *m_radiusMapCache  = nullptr; // DRAM radius lookup: radiusMap[qy*r + qx] = sqrt(qx²+qy²)
 
+  // Angle→texture row pointer tables: irisAnglePtrs[angle] = &irisTexData[texU(angle) * texH].
+  // Replaces the per-pixel multiply (fullAngle * texH) with a single indexed load.
+  const uint16_t *m_irisAnglePtrs[256]   = {};
+  const uint16_t *m_scleraAnglePtrs[256] = {};
+
   // Async transfer task pinned to Core 0 — overlaps the next render with the current transfer.
   TaskHandle_t      m_xferTask  = nullptr;
   SemaphoreHandle_t m_xferReady = nullptr; // render→task: new frame ready to send
