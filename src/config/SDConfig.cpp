@@ -63,6 +63,14 @@ bool SDConfig::load(DeviceConfig &cfg, int csPin, int sckPin, int misoPin, int m
     return false;
   }
 
+  // --- eye section ---
+  JsonObject eyeSect = doc["eye"];
+  if (!eyeSect.isNull())
+  {
+    cfg.startEyeIndex = eyeSect["startIndex"] | 0;
+    Serial.printf("[SDConfig] Start eye index: %d.\n", cfg.startEyeIndex);
+  }
+
   // --- network section ---
   JsonObject net = doc["network"];
   if (!net.isNull())
@@ -110,6 +118,7 @@ bool SDConfig::load(DeviceConfig &cfg, int csPin, int sckPin, int misoPin, int m
 void SDConfig::applyDefaults(DeviceConfig &cfg)
 {
   cfg.loaded          = false;
+  cfg.startEyeIndex   = 0;
   cfg.networkChannel  = 1;
   cfg.networkToken    = 0;
   cfg.allowedMacCount = 0;

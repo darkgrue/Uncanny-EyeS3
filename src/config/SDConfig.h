@@ -9,6 +9,9 @@
  * Config file format (/eyes_config.json):
  * @code
  * {
+ *   "eye": {
+ *     "startIndex": 1
+ *   },
  *   "network": {
  *     "channel": 1,
  *     "key": "SharedPassphrase",
@@ -44,6 +47,7 @@ static constexpr const char *SD_CONFIG_PATH     = "/eyes_config.json";
 struct DeviceConfig
 {
   bool loaded;                                           ///< true if a config file was successfully parsed
+  int      startEyeIndex;                               ///< Eye index to load at startup (0 = first registered eye)
   uint8_t  networkPmk[16];                              ///< 16-byte ESP-NOW PMK (all-zero = unset)
   uint32_t networkToken;                                 ///< App-layer auth token derived from key (0 = disabled)
   uint8_t  networkChannel;                               ///< ESP-NOW WiFi channel (1-13)

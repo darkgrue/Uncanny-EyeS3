@@ -189,7 +189,7 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
 | `iris.maxTexW` / `maxTexH`          | Cap iris texture dimensions at generation time (pixels). Enforces DRAM budget.     |
 | `sclera.maxTexW` / `maxTexH`        | Cap sclera texture dimensions at generation time (pixels).                         |
 | `eyelid.normalClosure`              | Eyelid coverage fraction at rest (0.0–1.0). Default: `0.0`                         |
-| `eyelid.wideClosure`                | Eyelid retraction fraction for the `eyesWide()` expression (0.0–1.0). Default: `1.0` |
+| `eyelid.wideClosure`                | Eyelid retraction fraction for `eyesWide()` (0.0–1.0). Default: `1.0`              |
 | `eyelid.tracking`                   | Eyelids track pupil vertical position. Default: `true`                             |
 
 `eyelid.normalClosure` sets how much the lids close over the eye in the resting-open position. A value of `0.15` means the lids cover 15 % of the eye radius at rest. `eyesWide()` retracts the lids to the `wideClosure` fraction, making the expression visually distinct from the normal resting gap. The supplied eye definitions use `0.15` (default\_eye), `0.20` (hazel), and `0.05` (eagle).
@@ -312,6 +312,9 @@ Place `/eyes_config.json` in the root directory of the card:
 
 ```json
 {
+  "eye": {
+    "startIndex": 1
+  },
   "network": {
     "channel": 1,
     "key": "SharedPassphrase",
@@ -325,8 +328,9 @@ Place `/eyes_config.json` in the root directory of the card:
 
 | Field                  | Type   | Default  | Description                                                             |
 | ---------------------- | ------ | -------- | ----------------------------------------------------------------------- |
+| `eye.startIndex`       | int    | `0`      | Eye index to load at startup; see Runtime Eye Switching for names       |
 | `network.channel`      | int    | `1`      | ESP-NOW WiFi channel (1–13); must match across all synchronized devices |
-| `network.key`          | string | _(none)_ | Shared passphrase or 32-hex-digit key; omit to disable authentication  |
+| `network.key`          | string | _(none)_ | Shared passphrase or 32-hex-digit key; omit to disable authentication   |
 | `network.allowed_macs` | array  | _(none)_ | MAC allowlist; omit to accept any device with the correct key           |
 
 ### Key Formats

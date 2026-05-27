@@ -33,8 +33,6 @@
 #include <esp_wifi.h>
 #include "driver/i2c_master.h"
 
-#define CURRENT_EYE default_eye::eye
-
  #define DEBUG_FPS_ENABLED           // Comment out to suppress FPS diagnostic messages on serial
 // #define PCF85063_DIAGNOSTIC_ENABLED // Comment out to suppress PCF85063 diagnostic status output on serial
 // #define SY6970_DIAGNOSTIC_ENABLED   // Comment out to suppress SY6970 diagnostic status output on serial
@@ -467,12 +465,20 @@ void setup()
 
   setupNetwork();
 
+  int startEye = s_deviceConfig.startEyeIndex;
+  if (startEye < 0 || startEye >= s_eyeCount)
+  {
+    Serial.printf("WARNING: startEyeIndex %d out of range, using 0.\n", startEye);
+    startEye = 0;
+  }
+
   s_animator = new EyeAnimator();
-  if (!s_animator->begin(s_display, CURRENT_EYE))
+  if (!s_animator->begin(s_display, *s_eyeRegistry[startEye]))
   {
     Serial.println("EyeAnimator init failed!");
     return;
   }
+  Serial.printf("Starting with eye: %s (index %d).\n", getEyeName(startEye), startEye);
 
   setupLightSensor();
 
