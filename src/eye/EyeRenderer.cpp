@@ -99,10 +99,13 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
   m_eyelidRenderer.setTrackingEnabled(eyeDef.eyelid.tracking);
 
   size_t bufSize = m_displaySize * m_displaySize * sizeof(uint16_t);
+  // 64-byte alignment satisfies ESP32-S3 GDMA cache-line requirement for PSRAM DMA.
+  // Without it the SPI driver allocates a per-chunk DRAM bounce buffer; with the
+  // 16 KB chunk size that bounce buffer can exhaust DRAM when texture caches are loaded.
   if (!m_frameBuf1)
-    m_frameBuf1 = (uint16_t *)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    m_frameBuf1 = (uint16_t *)heap_caps_aligned_alloc(64, bufSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
   if (!m_frameBuf2)
-    m_frameBuf2 = (uint16_t *)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    m_frameBuf2 = (uint16_t *)heap_caps_aligned_alloc(64, bufSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 
   if (!m_frameBuf1 || !m_frameBuf2)
   {
@@ -134,7 +137,9 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
   m_prevDirtyMaxX[0] = m_prevDirtyMaxX[1] = mid;
   m_prevDirtyMaxY[0] = m_prevDirtyMaxY[1] = mid;
 
-  Serial.printf("[EyeRenderer] Double buffers allocated: %zu bytes each (PSRAM)\n", bufSize);
+  Serial.printf("[EyeRenderer] Double buffers: %p / %p (%zu bytes each, align=%lu)\n",
+               m_frameBuf1, m_frameBuf2, bufSize, (uint32_t)m_frameBuf1 & 63);
+  Serial.printf("[EyeRenderer] Free DRAM: %zu bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 
   // Cache PROGMEM textures in PSRAM to eliminate flash cache-miss latency in the hot render loop.
   // Flash random-access penalty is ~1500 ns/miss vs ~80 ns/miss for PSRAM — up to 20× speedup.
@@ -536,7 +541,7 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   s_transferUs = t2 - t1;
   if (millis() - s_lastTimingPrint > 2000)
   {
-    Serial.printf("[Timing] render=%uus transfer=%uus total=%uus (~%u FPS)\n",
+    Serial.printf("[Timing] render=%luus transfer=%luus total=%luus (~%lu FPS)\n",
                   s_renderUs, s_transferUs, s_renderUs + s_transferUs,
                   (s_renderUs + s_transferUs) > 0 ? 1000000u / (s_renderUs + s_transferUs) : 0);
     s_lastTimingPrint = millis();

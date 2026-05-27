@@ -19,3 +19,14 @@
          .quadhd_io_num = _quadhd,
 -        .max_transfer_sz = (ESP32QSPI_MAX_PIXELS_AT_ONCE * 16) + 8,
 +        .max_transfer_sz = (ESP32QSPI_MAX_PIXELS_AT_ONCE * 2) + 8,
+
+--- a/GFX Library for Arduino/src/databus/Arduino_ESP32QSPI.cpp
++++ b/GFX Library for Arduino/src/databus/Arduino_ESP32QSPI.cpp
+@@ -457,7 +457,12 @@
+-    _spi_tran_ext.base.tx_buffer = data;
++    // PSRAM is not DMA-capable on ESP32-S3 (esp_ptr_dma_capable returns false for
++    // external RAM). Copy each chunk into the pre-allocated DRAM _buffer so the SPI
++    // driver never needs to allocate a per-transaction bounce buffer, which can OOM
++    // when texture caches have consumed available DRAM.
++    memcpy(_buffer, data, l);
++    _spi_tran_ext.base.tx_buffer = _buffer;
