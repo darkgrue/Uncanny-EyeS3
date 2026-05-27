@@ -313,8 +313,6 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   m_prevDirtyMaxY[bufIdx] = eyeMaxY;
 
   int eyeRadiusSq = (int)eyeRadius * (int)eyeRadius;
-  int irisRadiusSq = (int)irisRadius * (int)irisRadius;
-  int pupilRadiusSq = (int)pupilRadius * (int)pupilRadius;
 
   // Slit pupil: precompute per-frame boundary constants.
   // The boundary at the current pupil opening is a circular arc that passes
@@ -429,53 +427,50 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
     if (qy >= m_mapRadius) qy = m_mapRadius - 1;
     const uint8_t *angleRow  = (hasIrisTex || hasScleraTex)
                                ? (angleBase  + (size_t)qy * m_mapRadius) : nullptr;
-    const uint8_t *radiusRow = (radiusBase && (hasIrisTex || hasScleraTex))
+    const uint8_t *radiusRow = radiusBase
                                ? (radiusBase + (size_t)qy * m_mapRadius) : nullptr;
 
-    // dy² is constant for the row; hoist for slit-pupil test.
-    float slitDySq = hasSlit ? (float)dySq : 0.0f;
+    // Angle quadrant constants hoisted per row — eliminates the 4-way branch per textured pixel.
+    // Per-pixel: angleSign = dx<0 ? leftSign : rightSign (2-way, perfectly predicted at center).
+    // fullAngle = angleOffset + angleSign * (ta >> 1) + rotation.
+    const uint8_t angleOffset = (dy > 0) ? 128 : 0;
+    const int leftSign  = (dy > 0) ?  1 : -1;   // SW(+1) or NW(-1)
+    const int rightSign = -leftSign;             // SE(-1) or NE(+1)
+
+    // Per-row slit constant (zero when hasSlit is false, branch eliminated by compiler).
+    const float slitDySq = hasSlit ? (float)dySq : 0.0f;
 
     for (int x = xCircStart; x < xCircEnd; x++)
     {
       int dx = x - eyeCenterX;
-      int distSq = dx * dx + dySq;
+      int qx = dx < 0 ? -dx : dx;
+      if (qx >= m_mapRadius) qx = m_mapRadius - 1;
+      int r = radiusRow ? (int)radiusRow[qx] : (int)sqrtf((float)(qx * qx + qy * qy));
 
       uint16_t color;
-
-      float slitDdxSq = 0.0f;
+      bool inPupil;
       if (hasSlit)
       {
-        float px = (float)(dx < 0 ? -dx : dx);
-        float ddx = px - slitXc;
-        slitDdxSq = ddx * ddx;
+        float ddx = (float)qx - slitXc;
+        inPupil = (r <= (int)irisRadius && ddx * ddx + slitDySq <= slitRcSq);
       }
-
-      const bool inPupil = hasSlit
-          ? (distSq <= irisRadiusSq && slitDdxSq + slitDySq <= slitRcSq)
-          : (distSq <= pupilRadiusSq);
+      else
+      {
+        inPupil = (r <= (int)pupilRadius);
+      }
 
       if (inPupil)
       {
         color = pupilColorBE;
       }
-      else if (distSq <= irisRadiusSq)
+      else if (r <= (int)irisRadius)
       {
         if (hasIrisTex)
         {
-          int qx = dx < 0 ? -dx : dx;
-          if (qx >= m_mapRadius) qx = m_mapRadius - 1;
           uint8_t ta = angleRow[qx];
-
-          // Reconstruct full 0-255 CW angle from north using quadrant symmetry.
-          // Table encodes Q1 (dx≥0,dy≥0): ta=0 at south, ta=127 at east.
-          uint8_t fullAngle;
-          if      (dx >= 0 && dy > 0) fullAngle = (uint8_t)(128 - (ta >> 1)); // SE
-          else if (dx <  0 && dy > 0) fullAngle = (uint8_t)(128 + (ta >> 1)); // SW
-          else if (dx <  0)           fullAngle = (uint8_t)(     - (ta >> 1)); // NW
-          else                        fullAngle = (uint8_t)(       (ta >> 1)); // NE
-
-          int r = radiusRow ? (int)radiusRow[qx] : (int)sqrtf((float)distSq);
-          int texU = (uint8_t)(fullAngle + irisRot) * irisTexW / 256;
+          int angleSign = dx < 0 ? leftSign : rightSign;
+          uint8_t fullAngle = (uint8_t)(angleOffset + angleSign * (ta >> 1)) + irisRot;
+          int texU = (int)fullAngle * irisTexW / 256;
           int texV = (int)(((uint32_t)r * irisTexVMul) >> 16);
           if (texV >= irisTexH) texV = irisTexH - 1;
           color = irisTexData[texU * irisTexH + texV];
@@ -489,19 +484,11 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
       {
         if (hasScleraTex)
         {
-          int qx = dx < 0 ? -dx : dx;
-          if (qx >= m_mapRadius) qx = m_mapRadius - 1;
           uint8_t ta = angleRow[qx];
-
-          uint8_t fullAngle;
-          if      (dx >= 0 && dy > 0) fullAngle = (uint8_t)(128 - (ta >> 1));
-          else if (dx <  0 && dy > 0) fullAngle = (uint8_t)(128 + (ta >> 1));
-          else if (dx <  0)           fullAngle = (uint8_t)(     - (ta >> 1));
-          else                        fullAngle = (uint8_t)(       (ta >> 1));
-
-          int r = radiusRow ? (int)radiusRow[qx] : (int)sqrtf((float)distSq);
-          int texU = (uint8_t)(fullAngle + scleraRot) * scleraTexW / 256;
-          int rv = r - irisRadius;
+          int angleSign = dx < 0 ? leftSign : rightSign;
+          uint8_t fullAngle = (uint8_t)(angleOffset + angleSign * (ta >> 1)) + scleraRot;
+          int texU = (int)fullAngle * scleraTexW / 256;
+          int rv = r - (int)irisRadius;
           if (rv < 0) rv = 0;
           int texV = (int)(((uint32_t)rv * scleraTexVMul) >> 16);
           if (texV >= scleraTexH) texV = scleraTexH - 1;
