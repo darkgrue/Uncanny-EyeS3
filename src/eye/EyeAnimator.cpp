@@ -130,6 +130,9 @@ void EyeAnimator::update(uint32_t now)
     m_eyeDef = s_eyeRegistry[pending];
     m_renderer.begin(m_display, *m_eyeDef);
     setPupilRange(m_eyeDef->pupil.minFraction, m_eyeDef->pupil.maxFraction);
+    m_normalClosure = m_eyeDef->eyelid.normalClosure;
+    m_wideClosure = m_eyeDef->eyelid.wideClosure;
+    m_blink.setNormalGap(m_normalClosure);
     m_irisCenter = 0.5f;
     m_needsRender = true;
   }
@@ -157,9 +160,9 @@ void EyeAnimator::update(uint32_t now)
 
     // Adaptive exponential smoothing: blend factor scales with distance so large
     // joystick deflections get a fast response while small ones stay smooth.
-    float dx    = tx - m_joystickSmX;
-    float dy    = ty - m_joystickSmY;
-    float dist  = sqrtf(dx * dx + dy * dy);
+    float dx = tx - m_joystickSmX;
+    float dy = ty - m_joystickSmY;
+    float dist = sqrtf(dx * dx + dy * dy);
     float alpha = constrain(JOYSTICK_BASE_ALPHA + dist * JOYSTICK_DIST_ALPHA, 0.0f, 1.0f);
     m_joystickSmX += alpha * dx;
     m_joystickSmY += alpha * dy;
@@ -246,9 +249,9 @@ void EyeAnimator::update(uint32_t now)
   // m_currentIris still holds the previous frame's value at this point.
   if (m_wideJustDeactivated)
   {
-    m_pupilReleaseFrom  = m_currentIris;
+    m_pupilReleaseFrom = m_currentIris;
     m_pupilReleaseStart = now;
-    m_pupilReleasing    = true;
+    m_pupilReleasing = true;
     m_wideJustDeactivated = false;
   }
 
@@ -272,17 +275,17 @@ void EyeAnimator::update(uint32_t now)
   {
     if (m_wideJustActivated)
     {
-      m_pupilAnimFrom   = m_currentIris;
-      m_pupilAnimStart  = now;
+      m_pupilAnimFrom = m_currentIris;
+      m_pupilAnimStart = now;
       m_wideJustActivated = false;
     }
-    float t     = constrain((float)(now - m_pupilAnimStart) / (float)PUPIL_WIDE_DURATION, 0.0f, 1.0f);
+    float t = constrain((float)(now - m_pupilAnimStart) / (float)PUPIL_WIDE_DURATION, 0.0f, 1.0f);
     float eased = t * t * (3.0f - 2.0f * t);
     m_currentIris = m_pupilAnimFrom + (m_irisMin - m_pupilAnimFrom) * eased;
   }
   else if (m_pupilReleasing)
   {
-    float t     = constrain((float)(now - m_pupilReleaseStart) / (float)PUPIL_RELEASE_DURATION, 0.0f, 1.0f);
+    float t = constrain((float)(now - m_pupilReleaseStart) / (float)PUPIL_RELEASE_DURATION, 0.0f, 1.0f);
     float eased = t * t * (3.0f - 2.0f * t);
     m_currentIris = m_pupilReleaseFrom + (m_currentIris - m_pupilReleaseFrom) * eased;
     if (t >= 1.0f)
@@ -336,9 +339,9 @@ bool EyeAnimator::broadcastState()
   msg.eyeX = getEyeX();
   msg.eyeY = getEyeY();
   msg.pupilFactor = m_currentIris;
-  msg.blinkState  = (uint8_t)m_blink.getState();
+  msg.blinkState = (uint8_t)m_blink.getState();
   msg.blinkFactor = m_blink.getFactor();
-  msg.timestamp   = millis();
+  msg.timestamp = millis();
 
   msg.command = m_broadcastCommand;
 
@@ -396,7 +399,7 @@ void EyeAnimator::updateIrisAutonomous(uint32_t now)
     float normalSample = sqrt(-2.0f * log(u1 + 0.0001f)) * cos(2.0f * PI * u2);
     m_irisTarget = constrain(normalSample * IRIS_AMPLITUDE_SCALE, -IRIS_AMPLITUDE_MAX, IRIS_AMPLITUDE_MAX);
 
-    m_irisHoldDuration       = random(IRIS_HOLD_MIN, IRIS_HOLD_MAX);
+    m_irisHoldDuration = random(IRIS_HOLD_MIN, IRIS_HOLD_MAX);
     m_irisTransitionDuration = random(IRIS_TRANSITION_MIN, IRIS_TRANSITION_MAX);
 
     m_lastIrisChange = now;
@@ -511,7 +514,7 @@ void EyeAnimator::processNetworkInput()
     // resetting m_lastTrackTime and prevent the idle delay from counting up.
     if (!m_networkWasStale)
     {
-      m_networkWasStale   = true;
+      m_networkWasStale = true;
       m_remoteBlinkFactor = -1.0f;
       m_movement.setTargetLost();
       m_movement.setRandomMode(true);

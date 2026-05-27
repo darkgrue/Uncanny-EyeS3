@@ -33,7 +33,8 @@
 #include <esp_wifi.h>
 #include "driver/i2c_master.h"
 
- #define DEBUG_FPS_ENABLED           // Comment out to suppress FPS diagnostic messages on serial
+// #define DEBUG_FPS_ENABLED           // Comment out to suppress FPS diagnostic messages on serial
+// #define DEBUG_TIMING_ENABLED        // Comment out to suppress timing diagnostic messages on serial
 // #define PCF85063_DIAGNOSTIC_ENABLED // Comment out to suppress PCF85063 diagnostic status output on serial
 // #define SY6970_DIAGNOSTIC_ENABLED   // Comment out to suppress SY6970 diagnostic status output on serial
 
@@ -43,7 +44,7 @@ static uint32_t s_fpsTimer = 0;
 static uint32_t s_currentFps = 0;
 #endif
 
-static DeviceConfig    s_deviceConfig;
+static DeviceConfig s_deviceConfig;
 static EyeProjectConfig s_config;
 static EyeAnimator *s_animator = nullptr;
 static DisplayHAL *s_display = nullptr;
@@ -400,7 +401,6 @@ void setupNetwork()
   {
     Serial.println("ERROR: ESP-NOW init failed!");
   }
-
 }
 
 /**

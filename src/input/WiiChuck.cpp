@@ -26,11 +26,11 @@ WiiChuckInput::WiiChuckInput(uint8_t address, TwoWire &wire)
  */
 bool WiiChuckInput::begin()
 {
-  // The Nunchuck needs time to stabilise after power-on before it will ACK
+  // The Nunchuck needs time to stabilize after power-on before it will ACK
   // the handshake. 100 ms covers cold-start and warm-reset races.
   delay(100);
 
-  constexpr int     MAX_ATTEMPTS   = 5;
+  constexpr int MAX_ATTEMPTS = 5;
   constexpr uint32_t RETRY_DELAY_MS = 50;
 
   for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
@@ -177,8 +177,8 @@ void WiiChuckInput::readData()
     m_status[4] = m_wire.read();
     m_status[5] = m_wire.read();
 
-    joyX = (int)m_status[0] - 0x80;
-    joyY = (int)m_status[1] - 0x80;
+    joyX = 0x80 - (int)m_status[0];
+    joyY = 0x80 - (int)m_status[1];
 
     m_zPressed = !(m_status[5] & 0x01);
     m_cPressed = !((m_status[5] >> 1) & 0x01);

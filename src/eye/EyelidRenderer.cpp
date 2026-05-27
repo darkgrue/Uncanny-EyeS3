@@ -41,7 +41,7 @@ void EyelidRenderer::begin(int displaySize, uint16_t eyeRadius, const EyelidConf
   {
     for (int col = 0; col < m_displaySize; col++)
     {
-      uint8_t upperEnd   = config.upper[col * 2 + 1];
+      uint8_t upperEnd = config.upper[col * 2 + 1];
       uint8_t lowerStart = config.lower[col * 2];
       if ((upperEnd != 0 && upperEnd != 255) || (lowerStart != 0 && lowerStart != 255))
       {
@@ -146,10 +146,14 @@ void EyelidRenderer::renderDefaultEyelids(int centerX, int centerY, float upperY
   int minX = centerX - eyeRadius;
   int maxX = centerX + eyeRadius;
 
-  if (minY < 0)   minY = 0;
-  if (maxY >= size) maxY = size - 1;
-  if (minX < 0)   minX = 0;
-  if (maxX >= size) maxX = size - 1;
+  if (minY < 0)
+    minY = 0;
+  if (maxY >= size)
+    maxY = size - 1;
+  if (minX < 0)
+    minX = 0;
+  if (maxX >= size)
+    maxX = size - 1;
 
   for (int y = minY; y <= maxY; y++)
   {
@@ -190,14 +194,21 @@ void EyelidRenderer::renderCustomEyelids(float eyelidGap, int centerX, int cente
   if (m_config == nullptr)
     return;
 
-  int eyeRadius   = m_eyeRadius;
+  int eyeRadius = m_eyeRadius;
   int eyeRadiusSq = eyeRadius * eyeRadius;
-  float scale     = (float)size / 255.0f;
+  float scale = (float)size / 255.0f;
   float gapClosed = 1.0f - eyelidGap;
+
+#ifdef FDEBUG
+  static uint32_t s_lastDbg = 0;
+  bool doDbg = (millis() - s_lastDbg) >= 2000;
+  if (doDbg)
+    s_lastDbg = millis();
+#endif
 
   for (int x = 0; x < size; x++)
   {
-    int dx  = x - centerX;
+    int dx = x - centerX;
     int dxSq = dx * dx;
     if (dxSq > eyeRadiusSq)
       continue;
@@ -216,7 +227,7 @@ void EyelidRenderer::renderCustomEyelids(float eyelidGap, int centerX, int cente
       dyMax = (dyMax + dyMaxSq / dyMax) / 2;
     }
 
-    int circleTop    = centerY - dyMax;
+    int circleTop = centerY - dyMax;
     int circleBottom = centerY + dyMax;
     // Convert absolute screen column to eye-relative column for the table lookup.
     // The table was generated for a centered eye; when the eye is off-center,
@@ -233,14 +244,19 @@ void EyelidRenderer::renderCustomEyelids(float eyelidGap, int centerX, int cente
       if (upperEnd != 0)
       {
         int upperInnerY = (int)(upperEnd * scale);
-        int upperEdge   = circleTop + (int)(gapClosed * (float)(upperInnerY - circleTop));
+        int upperEdge = circleTop + (int)(gapClosed * (float)(upperInnerY - circleTop));
         if (upperEdge > circleTop)
         {
-          int yTop = (circleTop < 0)    ? 0    : circleTop;
+          int yTop = (circleTop < 0) ? 0 : circleTop;
           int yBot = (upperEdge > size) ? size : upperEdge;
           uint16_t colorBE = __builtin_bswap16(color);
           for (int y = yTop; y < yBot; y++)
             buffer[y * size + x] = colorBE;
+#ifdef FDEBUG
+          if (doDbg && x == centerX)
+            Serial.printf("[Eyelid] center col: gapClosed=%.2f circleTop=%d upperInnerY=%d upperEdge=%d (paints %d-%d)\n",
+                          gapClosed, circleTop, upperInnerY, upperEdge, yTop, yBot);
+#endif
         }
       }
     }
@@ -252,14 +268,19 @@ void EyelidRenderer::renderCustomEyelids(float eyelidGap, int centerX, int cente
       if (lowerStart != 0)
       {
         int lowerInnerY = (int)(m_config->lower[tableIdx + 1] * scale);
-        int lowerEdge   = circleBottom - (int)(gapClosed * (float)(circleBottom - lowerInnerY));
+        int lowerEdge = circleBottom - (int)(gapClosed * (float)(circleBottom - lowerInnerY));
         if (lowerEdge < circleBottom)
         {
-          int yTop = (lowerEdge    < 0)    ? 0    : lowerEdge;
+          int yTop = (lowerEdge < 0) ? 0 : lowerEdge;
           int yBot = (circleBottom > size) ? size : circleBottom;
           uint16_t colorBE = __builtin_bswap16(color);
           for (int y = yTop; y < yBot; y++)
             buffer[y * size + x] = colorBE;
+#ifdef FDEBUG
+          if (doDbg && x == centerX)
+            Serial.printf("[Eyelid] center col: lowerInnerY=%d lowerEdge=%d circleBottom=%d (paints %d-%d)\n",
+                          lowerInnerY, lowerEdge, circleBottom, yTop, yBot);
+#endif
         }
       }
     }

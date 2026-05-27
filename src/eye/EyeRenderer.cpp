@@ -19,15 +19,15 @@
 // keeping the include here (not in a shared header) achieves that.
 #if defined(ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED)
 #include "display/display_466.h"
-static const uint8_t *const s_angleMap   = polarAngle_233;
-static constexpr bool        s_hasAngleMap = true;
+static const uint8_t *const s_angleMap = polarAngle_233;
+static constexpr bool s_hasAngleMap = true;
 #elif defined(ARDUINO_LILYGO_T_RGB)
 #include "display/display_480.h"
-static const uint8_t *const s_angleMap   = polarAngle_240;
-static constexpr bool        s_hasAngleMap = true;
+static const uint8_t *const s_angleMap = polarAngle_240;
+static constexpr bool s_hasAngleMap = true;
 #else
-static const uint8_t *const s_angleMap   = nullptr;
-static constexpr bool        s_hasAngleMap = false;
+static const uint8_t *const s_angleMap = nullptr;
+static constexpr bool s_hasAngleMap = false;
 #endif
 
 // Debug: force eyelids to a fixed gap (0=closed, 100=open, 50=half).
@@ -73,9 +73,21 @@ EyeRenderer::~EyeRenderer()
     heap_caps_free(m_radiusMapCache);
     m_radiusMapCache = nullptr;
   }
-  if (m_xferTask)  { vTaskDelete(m_xferTask);       m_xferTask  = nullptr; }
-  if (m_xferReady) { vSemaphoreDelete(m_xferReady); m_xferReady = nullptr; }
-  if (m_xferDone)  { vSemaphoreDelete(m_xferDone);  m_xferDone  = nullptr; }
+  if (m_xferTask)
+  {
+    vTaskDelete(m_xferTask);
+    m_xferTask = nullptr;
+  }
+  if (m_xferReady)
+  {
+    vSemaphoreDelete(m_xferReady);
+    m_xferReady = nullptr;
+  }
+  if (m_xferDone)
+  {
+    vSemaphoreDelete(m_xferDone);
+    m_xferDone = nullptr;
+  }
 }
 
 /**
@@ -141,7 +153,7 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
   m_prevDirtyMaxY[0] = m_prevDirtyMaxY[1] = mid;
 
   Serial.printf("[EyeRenderer] Double buffers: %p / %p (%zu bytes each, align=%lu)\n",
-               m_frameBuf1, m_frameBuf2, bufSize, (uint32_t)m_frameBuf1 & 63);
+                m_frameBuf1, m_frameBuf2, bufSize, (uint32_t)m_frameBuf1 & 63);
   Serial.printf("[EyeRenderer] Free DRAM: %zu bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 
   // Cache PROGMEM textures in PSRAM to eliminate flash cache-miss latency in the hot render loop.
@@ -149,16 +161,33 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
 
   // If an async transfer is in-flight (eye switch), wait for it to finish before
   // releasing caches — the task holds a pointer into m_displayBuf and the cache arrays.
-  if (m_xferDone) {
+  if (m_xferDone)
+  {
     xSemaphoreTake(m_xferDone, portMAX_DELAY);
     xSemaphoreGive(m_xferDone); // restore so the first renderFrame() can take it
   }
 
   // Release any previous caches (called on eye switch).
-  if (m_irisTexCache)   { heap_caps_free(m_irisTexCache);   m_irisTexCache   = nullptr; }
-  if (m_scleraTexCache) { heap_caps_free(m_scleraTexCache); m_scleraTexCache = nullptr; }
-  if (m_angleMapCache)  { heap_caps_free(m_angleMapCache);  m_angleMapCache  = nullptr; }
-  if (m_radiusMapCache) { heap_caps_free(m_radiusMapCache); m_radiusMapCache = nullptr; }
+  if (m_irisTexCache)
+  {
+    heap_caps_free(m_irisTexCache);
+    m_irisTexCache = nullptr;
+  }
+  if (m_scleraTexCache)
+  {
+    heap_caps_free(m_scleraTexCache);
+    m_scleraTexCache = nullptr;
+  }
+  if (m_angleMapCache)
+  {
+    heap_caps_free(m_angleMapCache);
+    m_angleMapCache = nullptr;
+  }
+  if (m_radiusMapCache)
+  {
+    heap_caps_free(m_radiusMapCache);
+    m_radiusMapCache = nullptr;
+  }
 
   // Allocate in priority order: angle map and radius map first (hot inner-loop lookups),
   // then iris texture, then sclera (largest, most cache-unfriendly — can tolerate PSRAM).
@@ -168,15 +197,28 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
 
     m_angleMapCache = (uint8_t *)heap_caps_malloc(sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     const char *angleLoc = "DRAM";
-    if (!m_angleMapCache) { m_angleMapCache = (uint8_t *)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); angleLoc = "PSRAM"; }
-    if (m_angleMapCache) { memcpy(m_angleMapCache, s_angleMap, sz); Serial.printf("[EyeRenderer] Angle map cached in %s: %zu bytes\n", angleLoc, sz); }
-    else Serial.println("[EyeRenderer] Warning: failed to cache angle map");
+    if (!m_angleMapCache)
+    {
+      m_angleMapCache = (uint8_t *)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      angleLoc = "PSRAM";
+    }
+    if (m_angleMapCache)
+    {
+      memcpy(m_angleMapCache, s_angleMap, sz);
+      Serial.printf("[EyeRenderer] Angle map cached in %s: %zu bytes\n", angleLoc, sz);
+    }
+    else
+      Serial.println("[EyeRenderer] Warning: failed to cache angle map");
 
     // Radius map: same indexing as angle map. radiusMap[qy*r + qx] = (uint8_t)sqrt(qx²+qy²).
     // Computed at startup (~1ms) so no PROGMEM table is needed.
     m_radiusMapCache = (uint8_t *)heap_caps_malloc(sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     const char *radiusLoc = "DRAM";
-    if (!m_radiusMapCache) { m_radiusMapCache = (uint8_t *)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); radiusLoc = "PSRAM"; }
+    if (!m_radiusMapCache)
+    {
+      m_radiusMapCache = (uint8_t *)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      radiusLoc = "PSRAM";
+    }
     if (m_radiusMapCache)
     {
       for (int qy = 0; qy < m_mapRadius; qy++)
@@ -187,7 +229,8 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
         }
       Serial.printf("[EyeRenderer] Radius map computed in %s: %zu bytes\n", radiusLoc, sz);
     }
-    else Serial.println("[EyeRenderer] Warning: failed to allocate radius map");
+    else
+      Serial.println("[EyeRenderer] Warning: failed to allocate radius map");
   }
 
   if (eyeDef.iris.texture.data && eyeDef.iris.texture.width > 0 && eyeDef.iris.texture.height > 0)
@@ -195,15 +238,21 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
     size_t sz = (size_t)eyeDef.iris.texture.width * eyeDef.iris.texture.height * sizeof(uint16_t);
     m_irisTexCache = (uint16_t *)heap_caps_malloc(sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     const char *irisLoc = "DRAM";
-    if (!m_irisTexCache) { m_irisTexCache = (uint16_t *)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); irisLoc = "PSRAM"; }
+    if (!m_irisTexCache)
+    {
+      m_irisTexCache = (uint16_t *)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      irisLoc = "PSRAM";
+    }
     if (m_irisTexCache)
     {
       memcpy(m_irisTexCache, eyeDef.iris.texture.data, sz);
       size_t count = sz / sizeof(uint16_t);
-      for (size_t i = 0; i < count; i++) m_irisTexCache[i] = __builtin_bswap16(m_irisTexCache[i]);
+      for (size_t i = 0; i < count; i++)
+        m_irisTexCache[i] = __builtin_bswap16(m_irisTexCache[i]);
       Serial.printf("[EyeRenderer] Iris texture cached in %s: %zu bytes\n", irisLoc, sz);
     }
-    else Serial.println("[EyeRenderer] Warning: failed to cache iris texture");
+    else
+      Serial.println("[EyeRenderer] Warning: failed to cache iris texture");
   }
 
   if (eyeDef.sclera.texture.data && eyeDef.sclera.texture.width > 0 && eyeDef.sclera.texture.height > 0)
@@ -211,29 +260,37 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
     size_t sz = (size_t)eyeDef.sclera.texture.width * eyeDef.sclera.texture.height * sizeof(uint16_t);
     m_scleraTexCache = (uint16_t *)heap_caps_malloc(sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     const char *scleraLoc = "DRAM";
-    if (!m_scleraTexCache) { m_scleraTexCache = (uint16_t *)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); scleraLoc = "PSRAM"; }
+    if (!m_scleraTexCache)
+    {
+      m_scleraTexCache = (uint16_t *)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      scleraLoc = "PSRAM";
+    }
     if (m_scleraTexCache)
     {
       memcpy(m_scleraTexCache, eyeDef.sclera.texture.data, sz);
       size_t count = sz / sizeof(uint16_t);
-      for (size_t i = 0; i < count; i++) m_scleraTexCache[i] = __builtin_bswap16(m_scleraTexCache[i]);
+      for (size_t i = 0; i < count; i++)
+        m_scleraTexCache[i] = __builtin_bswap16(m_scleraTexCache[i]);
       Serial.printf("[EyeRenderer] Sclera texture cached in %s: %zu bytes\n", scleraLoc, sz);
     }
-    else Serial.println("[EyeRenderer] Warning: failed to cache sclera texture");
+    else
+      Serial.println("[EyeRenderer] Warning: failed to cache sclera texture");
   }
 
   // Build angle→texture-row pointer tables.
   // irisAnglePtrs[a] = pointer to column a's data in the (angle-major) iris texture.
   // Replaces the per-pixel multiply (fullAngle * texH) with a table-indexed load.
-  memset(m_irisAnglePtrs,   0, sizeof(m_irisAnglePtrs));
+  memset(m_irisAnglePtrs, 0, sizeof(m_irisAnglePtrs));
   memset(m_scleraAnglePtrs, 0, sizeof(m_scleraAnglePtrs));
-  if (eyeDef.iris.texture.data && eyeDef.iris.texture.width > 0 && eyeDef.iris.texture.height > 0) {
+  if (eyeDef.iris.texture.data && eyeDef.iris.texture.width > 0 && eyeDef.iris.texture.height > 0)
+  {
     const uint16_t *base = m_irisTexCache ? m_irisTexCache : eyeDef.iris.texture.data;
     int texW = eyeDef.iris.texture.width, texH = eyeDef.iris.texture.height;
     for (int a = 0; a < 256; a++)
       m_irisAnglePtrs[a] = base + (size_t)((int)a * texW / 256) * texH;
   }
-  if (eyeDef.sclera.texture.data && eyeDef.sclera.texture.width > 0 && eyeDef.sclera.texture.height > 0) {
+  if (eyeDef.sclera.texture.data && eyeDef.sclera.texture.width > 0 && eyeDef.sclera.texture.height > 0)
+  {
     const uint16_t *base = m_scleraTexCache ? m_scleraTexCache : eyeDef.sclera.texture.data;
     int texW = eyeDef.sclera.texture.width, texH = eyeDef.sclera.texture.height;
     for (int a = 0; a < 256; a++)
@@ -246,7 +303,7 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
   {
     for (int col = 0; col < m_displaySize; col++)
     {
-      uint8_t upperEnd   = eyeDef.eyelid.upper[col * 2 + 1];
+      uint8_t upperEnd = eyeDef.eyelid.upper[col * 2 + 1];
       uint8_t lowerStart = eyeDef.eyelid.lower[col * 2];
       if ((upperEnd != 0 && upperEnd != 255) || (lowerStart != 0 && lowerStart != 255))
       {
@@ -257,9 +314,10 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
   }
 
   // Create async transfer task once; it survives eye-switch calls to begin().
-  if (!m_xferDone) {
+  if (!m_xferDone)
+  {
     m_xferReady = xSemaphoreCreateBinary();
-    m_xferDone  = xSemaphoreCreateBinary();
+    m_xferDone = xSemaphoreCreateBinary();
     xSemaphoreGive(m_xferDone); // pre-signal: first frame has no prior transfer to wait on
     xTaskCreatePinnedToCore(xferTaskFunc, "eyeXfer", 4096, this, 5, &m_xferTask, 0);
     Serial.println("[EyeRenderer] Async transfer task created on Core 0");
@@ -271,7 +329,8 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
 void EyeRenderer::xferTaskFunc(void *pv)
 {
   EyeRenderer *self = static_cast<EyeRenderer *>(pv);
-  for (;;) {
+  for (;;)
+  {
     xSemaphoreTake(self->m_xferReady, portMAX_DELAY);
     uint32_t t0 = micros();
     self->m_display->directTransfer(self->m_displayBuf, 0, 0, 0, 0,
@@ -352,10 +411,14 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   int eyeMinX = minX, eyeMinY = minY, eyeMaxX = maxX, eyeMaxY = maxY;
   if (m_prevDirtyMinX[bufIdx] < m_prevDirtyMaxX[bufIdx])
   {
-    if (m_prevDirtyMinX[bufIdx] < minX) minX = m_prevDirtyMinX[bufIdx];
-    if (m_prevDirtyMinY[bufIdx] < minY) minY = m_prevDirtyMinY[bufIdx];
-    if (m_prevDirtyMaxX[bufIdx] > maxX) maxX = m_prevDirtyMaxX[bufIdx];
-    if (m_prevDirtyMaxY[bufIdx] > maxY) maxY = m_prevDirtyMaxY[bufIdx];
+    if (m_prevDirtyMinX[bufIdx] < minX)
+      minX = m_prevDirtyMinX[bufIdx];
+    if (m_prevDirtyMinY[bufIdx] < minY)
+      minY = m_prevDirtyMinY[bufIdx];
+    if (m_prevDirtyMaxX[bufIdx] > maxX)
+      maxX = m_prevDirtyMaxX[bufIdx];
+    if (m_prevDirtyMaxY[bufIdx] > maxY)
+      maxY = m_prevDirtyMaxY[bufIdx];
   }
   m_prevDirtyMinX[bufIdx] = eyeMinX;
   m_prevDirtyMinY[bufIdx] = eyeMinY;
@@ -371,7 +434,8 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   // that arc. slitXc and slitRcSq are hoisted out of the column/row loops.
   const bool hasSlit = (eye.pupil.slitRadius > 0.0f && pupilRadius > 0);
   float slitXc = 0.0f, slitRcSq = 0.0f;
-  if (hasSlit) {
+  if (hasSlit)
+  {
     float slitPx = eye.pupil.slitRadius * (float)irisRadius; // vertical half-height
     float x2 = (float)pupilRadius;                           // horizontal half-width
     float y1 = slitPx + ((float)irisRadius - slitPx) * x2 / (float)irisRadius;
@@ -381,27 +445,25 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   }
 
   // Texture pointers — prefer DRAM cache to avoid flash/PSRAM latency.
-  const uint16_t *irisTexData   = m_irisTexCache   ? m_irisTexCache   : eye.iris.texture.data;
+  const uint16_t *irisTexData = m_irisTexCache ? m_irisTexCache : eye.iris.texture.data;
   const uint16_t *scleraTexData = m_scleraTexCache ? m_scleraTexCache : eye.sclera.texture.data;
-  const int irisTexW  = eye.iris.texture.width;
-  const int irisTexH  = eye.iris.texture.height;
+  const int irisTexW = eye.iris.texture.width;
+  const int irisTexH = eye.iris.texture.height;
   const int scleraTexW = eye.sclera.texture.width;
   const int scleraTexH = eye.sclera.texture.height;
-  const bool hasIrisTex  = (s_hasAngleMap && m_mapRadius > 0
-                            && eye.iris.texture.data  && irisTexW  > 0 && irisTexH  > 0);
-  const bool hasScleraTex = (s_hasAngleMap && m_mapRadius > 0
-                             && eye.sclera.texture.data && scleraTexW > 0 && scleraTexH > 0);
+  const bool hasIrisTex = (s_hasAngleMap && m_mapRadius > 0 && eye.iris.texture.data && irisTexW > 0 && irisTexH > 0);
+  const bool hasScleraTex = (s_hasAngleMap && m_mapRadius > 0 && eye.sclera.texture.data && scleraTexW > 0 && scleraTexH > 0);
   // Angle map and radius map: prefer DRAM cache.
-  const uint8_t *angleBase  = m_angleMapCache  ? m_angleMapCache  : s_angleMap;
+  const uint8_t *angleBase = m_angleMapCache ? m_angleMapCache : s_angleMap;
   const uint8_t *radiusBase = m_radiusMapCache ? m_radiusMapCache : nullptr;
 
   // Per-frame fixed-point reciprocals — replace integer division in the inner loop.
   // Q16 format: texV = (r * mul) >> 16  gives  r * texH / radius without hardware divide.
   const int scleraWidth = (int)eyeRadius - (int)irisRadius;
-  const uint32_t irisTexVMul   = (hasIrisTex  && irisRadius  > 0) ? (((uint32_t)irisTexH  << 16) / irisRadius)                        : 0;
+  const uint32_t irisTexVMul = (hasIrisTex && irisRadius > 0) ? (((uint32_t)irisTexH << 16) / irisRadius) : 0;
   const uint32_t scleraTexVMul = (hasScleraTex && scleraWidth > 0) ? (((uint32_t)scleraTexH << 16) / (uint32_t)scleraWidth) : 0;
   // irisAngle / scleraAngle are 0-1023; map to 0-255 for 8-bit angle space.
-  const uint8_t irisRot   = (uint8_t)(irisAngle  >> 2);
+  const uint8_t irisRot = (uint8_t)(irisAngle >> 2);
   const uint8_t scleraRot = (uint8_t)(scleraAngle >> 2);
 
   uint16_t bgColor = eye.backColor;
@@ -409,9 +471,9 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   // Pre-swap all solid colors to big-endian so the frame buffer is ready for
   // directTransfer → writeBytes, which sends raw bytes directly to the display
   // via PSRAM DMA without a DRAM copy.
-  const uint16_t bgColorBE     = __builtin_bswap16(bgColor);
-  const uint16_t pupilColorBE  = __builtin_bswap16(eye.pupil.color);
-  const uint16_t irisColorBE   = __builtin_bswap16(eye.iris.color);
+  const uint16_t bgColorBE = __builtin_bswap16(bgColor);
+  const uint16_t pupilColorBE = __builtin_bswap16(eye.pupil.color);
+  const uint16_t irisColorBE = __builtin_bswap16(eye.iris.color);
   const uint16_t scleraColorBE = __builtin_bswap16(eye.sclera.color);
 
   float eyelidGap = 1.0f - blinkFactor;
@@ -428,8 +490,10 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   int upperRow = m_eyelidRenderer.getUpperRow(m_displaySize);
   int lowerRow = m_eyelidRenderer.getLowerRow(m_displaySize);
 
+#ifdef DEBUG_TIMING_ENABLED
   static uint32_t s_t0 = 0;
   s_t0 = micros();
+#endif
 
   // Row-major loop: sequential PSRAM writes per row dominate over texture cache effects.
   // Column-major was tested (2026-05-27) and regressed: strided PSRAM writes (+17ms default,
@@ -444,28 +508,33 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
 
     // Compute circle bounds for this row. Default to empty range when outside circle.
     int xCircStart = eyeCenterX;
-    int xCircEnd   = eyeCenterX;
+    int xCircEnd = eyeCenterX;
     if (dxMaxSq > 0)
     {
       int dxMax = (int)sqrtf((float)dxMaxSq);
       if ((dxMax + 1) * (dxMax + 1) <= dxMaxSq)
         dxMax++;
       xCircStart = eyeCenterX - dxMax;
-      xCircEnd   = eyeCenterX + dxMax;
-      if (xCircStart < minX) xCircStart = minX;
-      if (xCircEnd   > maxX) xCircEnd   = maxX;
+      xCircEnd = eyeCenterX + dxMax;
+      if (xCircStart < minX)
+        xCircStart = minX;
+      if (xCircEnd > maxX)
+        xCircEnd = maxX;
     }
 
     // Fill left gap (outside circle) with background color.
-    for (int x = minX; x < xCircStart; x++) rowBuf[x] = bgColorBE;
+    for (int x = minX; x < xCircStart; x++)
+      rowBuf[x] = bgColorBE;
 
     // Fill right gap (outside circle) with background color.
-    for (int x = xCircEnd; x < maxX; x++) rowBuf[x] = bgColorBE;
+    for (int x = xCircEnd; x < maxX; x++)
+      rowBuf[x] = bgColorBE;
 
     // Eyelid rows: fill circle portion with bgColor so drawEyelids() paints on top.
     if (!m_hasCustomLids && (y <= upperRow || y >= lowerRow))
     {
-      for (int x = xCircStart; x < xCircEnd; x++) rowBuf[x] = bgColorBE;
+      for (int x = xCircStart; x < xCircEnd; x++)
+        rowBuf[x] = bgColorBE;
       continue;
     }
 
@@ -474,18 +543,21 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
 
     // Hoist per-row values for texture lookups.
     int qy = dy < 0 ? -dy : dy;
-    if (qy >= m_mapRadius) qy = m_mapRadius - 1;
-    const uint8_t *angleRow  = (hasIrisTex || hasScleraTex)
-                               ? (angleBase  + (size_t)qy * m_mapRadius) : nullptr;
+    if (qy >= m_mapRadius)
+      qy = m_mapRadius - 1;
+    const uint8_t *angleRow = (hasIrisTex || hasScleraTex)
+                                  ? (angleBase + (size_t)qy * m_mapRadius)
+                                  : nullptr;
     const uint8_t *radiusRow = radiusBase
-                               ? (radiusBase + (size_t)qy * m_mapRadius) : nullptr;
+                                   ? (radiusBase + (size_t)qy * m_mapRadius)
+                                   : nullptr;
 
     // Angle quadrant constants hoisted per row — eliminates the 4-way branch per textured pixel.
     // Per-pixel: angleSign = dx<0 ? leftSign : rightSign (2-way, perfectly predicted at center).
     // fullAngle = angleOffset + angleSign * (ta >> 1) + rotation.
     const uint8_t angleOffset = (dy > 0) ? 128 : 0;
-    const int leftSign  = (dy > 0) ?  1 : -1;   // SW(+1) or NW(-1)
-    const int rightSign = -leftSign;             // SE(-1) or NE(+1)
+    const int leftSign = (dy > 0) ? 1 : -1; // SW(+1) or NW(-1)
+    const int rightSign = -leftSign;        // SE(-1) or NE(+1)
 
     // Per-row slit constant (zero when hasSlit is false, branch eliminated by compiler).
     const float slitDySq = hasSlit ? (float)dySq : 0.0f;
@@ -495,20 +567,29 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
     // -1 means the entire row is outside that zone.
     // Built by sqrtf + one-step radius-map fine-tune (O(1), negligible vs pixel work).
     int xPupilLim = -1, xIrisLim = -1;
-    if (!hasSlit && radiusRow) {
+    if (!hasSlit && radiusRow)
+    {
       int pr2 = (int)pupilRadius * (int)pupilRadius;
-      if (dySq < pr2) {
+      if (dySq < pr2)
+      {
         xPupilLim = (int)sqrtf((float)(pr2 - dySq));
-        if (xPupilLim >= m_mapRadius) xPupilLim = m_mapRadius - 1;
-        while (xPupilLim + 1 < m_mapRadius && (int)radiusRow[xPupilLim + 1] <= (int)pupilRadius) xPupilLim++;
-        while (xPupilLim >= 0 && (int)radiusRow[xPupilLim] > (int)pupilRadius) xPupilLim--;
+        if (xPupilLim >= m_mapRadius)
+          xPupilLim = m_mapRadius - 1;
+        while (xPupilLim + 1 < m_mapRadius && (int)radiusRow[xPupilLim + 1] <= (int)pupilRadius)
+          xPupilLim++;
+        while (xPupilLim >= 0 && (int)radiusRow[xPupilLim] > (int)pupilRadius)
+          xPupilLim--;
       }
       int ir2 = (int)irisRadius * (int)irisRadius;
-      if (dySq < ir2) {
+      if (dySq < ir2)
+      {
         xIrisLim = (int)sqrtf((float)(ir2 - dySq));
-        if (xIrisLim >= m_mapRadius) xIrisLim = m_mapRadius - 1;
-        while (xIrisLim + 1 < m_mapRadius && (int)radiusRow[xIrisLim + 1] <= (int)irisRadius) xIrisLim++;
-        while (xIrisLim >= 0 && (int)radiusRow[xIrisLim] > (int)irisRadius) xIrisLim--;
+        if (xIrisLim >= m_mapRadius)
+          xIrisLim = m_mapRadius - 1;
+        while (xIrisLim + 1 < m_mapRadius && (int)radiusRow[xIrisLim + 1] <= (int)irisRadius)
+          xIrisLim++;
+        while (xIrisLim >= 0 && (int)radiusRow[xIrisLim] > (int)irisRadius)
+          xIrisLim--;
       }
     }
 
@@ -516,77 +597,112 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
     {
       int dx = x - eyeCenterX;
       int qx = dx < 0 ? -dx : dx;
-      if (qx >= m_mapRadius) qx = m_mapRadius - 1;
+      if (qx >= m_mapRadius)
+        qx = m_mapRadius - 1;
 
       uint16_t color;
 
-      if (!hasSlit && radiusRow) {
+      if (!hasSlit && radiusRow)
+      {
         // Fast path: zone determined by precomputed per-row qx limits — no r comparison needed.
-        if (qx <= xPupilLim) {
+        if (qx <= xPupilLim)
+        {
           color = pupilColorBE;
-        } else if (qx <= xIrisLim) {
-          if (hasIrisTex) {
+        }
+        else if (qx <= xIrisLim)
+        {
+          if (hasIrisTex)
+          {
             int r = (int)radiusRow[qx];
             uint8_t ta = angleRow[qx];
             int angleSign = dx < 0 ? leftSign : rightSign;
             uint8_t fullAngle = (uint8_t)(angleOffset + angleSign * (ta >> 1)) + irisRot;
             int texV = (int)(((uint32_t)r * irisTexVMul) >> 16);
-            if (texV >= irisTexH) texV = irisTexH - 1;
+            if (texV >= irisTexH)
+              texV = irisTexH - 1;
             color = m_irisAnglePtrs[fullAngle][texV];
-          } else {
+          }
+          else
+          {
             color = irisColorBE;
           }
-        } else {
-          if (hasScleraTex) {
+        }
+        else
+        {
+          if (hasScleraTex)
+          {
             int r = (int)radiusRow[qx];
             uint8_t ta = angleRow[qx];
             int angleSign = dx < 0 ? leftSign : rightSign;
             uint8_t fullAngle = (uint8_t)(angleOffset + angleSign * (ta >> 1)) + scleraRot;
             int rv = r - (int)irisRadius;
-            if (rv < 0) rv = 0;
+            if (rv < 0)
+              rv = 0;
             int texV = (int)(((uint32_t)rv * scleraTexVMul) >> 16);
-            if (texV >= scleraTexH) texV = scleraTexH - 1;
+            if (texV >= scleraTexH)
+              texV = scleraTexH - 1;
             color = m_scleraAnglePtrs[fullAngle][texV];
-          } else {
+          }
+          else
+          {
             color = scleraColorBE;
           }
         }
-      } else {
+      }
+      else
+      {
         // Fallback: slit pupil or no radius map.
         int r = radiusRow ? (int)radiusRow[qx] : (int)sqrtf((float)(qx * qx + qy * qy));
         bool inPupil;
-        if (hasSlit) {
+        if (hasSlit)
+        {
           float ddx = (float)qx - slitXc;
           inPupil = (r <= (int)irisRadius && ddx * ddx + slitDySq <= slitRcSq);
-        } else {
+        }
+        else
+        {
           inPupil = (r <= (int)pupilRadius);
         }
-        if (inPupil) {
+        if (inPupil)
+        {
           color = pupilColorBE;
-        } else if (r <= (int)irisRadius) {
-          if (hasIrisTex) {
+        }
+        else if (r <= (int)irisRadius)
+        {
+          if (hasIrisTex)
+          {
             uint8_t ta = angleRow[qx];
             int angleSign = dx < 0 ? leftSign : rightSign;
             uint8_t fullAngle = (uint8_t)(angleOffset + angleSign * (ta >> 1)) + irisRot;
             int texU = (int)fullAngle * irisTexW / 256;
             int texV = (int)(((uint32_t)r * irisTexVMul) >> 16);
-            if (texV >= irisTexH) texV = irisTexH - 1;
+            if (texV >= irisTexH)
+              texV = irisTexH - 1;
             color = irisTexData[texU * irisTexH + texV];
-          } else {
+          }
+          else
+          {
             color = irisColorBE;
           }
-        } else {
-          if (hasScleraTex) {
+        }
+        else
+        {
+          if (hasScleraTex)
+          {
             uint8_t ta = angleRow[qx];
             int angleSign = dx < 0 ? leftSign : rightSign;
             uint8_t fullAngle = (uint8_t)(angleOffset + angleSign * (ta >> 1)) + scleraRot;
             int texU = (int)fullAngle * scleraTexW / 256;
             int rv = r - (int)irisRadius;
-            if (rv < 0) rv = 0;
+            if (rv < 0)
+              rv = 0;
             int texV = (int)(((uint32_t)rv * scleraTexVMul) >> 16);
-            if (texV >= scleraTexH) texV = scleraTexH - 1;
+            if (texV >= scleraTexH)
+              texV = scleraTexH - 1;
             color = scleraTexData[texU * scleraTexH + texV];
-          } else {
+          }
+          else
+          {
             color = scleraColorBE;
           }
         }
@@ -597,7 +713,9 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
 
   m_eyelidRenderer.drawEyelids(m_renderBuf);
 
+#ifdef DEBUG_TIMING_ENABLED
   uint32_t t1 = micros();
+#endif
 
   m_dirtyMinX = eyeMinX;
   m_dirtyMinY = eyeMinY;
@@ -616,6 +734,7 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   // The task calls directTransfer, measures duration into m_xferUs, then signals m_xferDone.
   xSemaphoreGive(m_xferReady);
 
+#ifdef DEBUG_TIMING_ENABLED
   static uint32_t s_lastTimingPrint = 0;
   static uint32_t s_renderUs = 0;
   s_renderUs = t1 - s_t0;
@@ -627,4 +746,5 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
                   s_renderUs > 0 ? 1000000u / s_renderUs : 0);
     s_lastTimingPrint = millis();
   }
+#endif
 }
