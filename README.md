@@ -135,7 +135,6 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
     "name": "default_eye",
     "radiusFraction": 0.5,
     "backColor": 0,
-    "tracking": true,
     "squint": 0,
     "pupil": {
         "color": 0,
@@ -160,7 +159,8 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
     },
     "eyelid": {
         "color": 0,
-        "normalClosure": 0.15
+        "normalClosure": 0.15,
+        "tracking": true
     }
 }
 ```
@@ -169,8 +169,7 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
 | ----------------------------------- | ---------------------------------------------------------------------------------- |
 | `radiusFraction`                    | Eye radius as fraction of the smaller screen dimension                             |
 | `backColor`                         | Background color behind the eye (RGB565)                                           |
-| `tracking`                          | Eyelids track pupil vertical position                                              |
-| `pupil.slitRadius`                  | `0` = round pupil; `>0` = slit pupil                                               |
+| `pupil.slitRadius`                  | `0.0` = round; fraction of iris radius for slit vertical half-height (e.g. `0.75`) |
 | `pupil.minFraction` / `maxFraction` | Pupil size range as fraction of iris radius                                        |
 | `iris.radiusFraction`               | Iris radius as fraction of eye radius                                              |
 | `iris.spin` / `iSpin`               | Continuous spin / fixed per-frame spin override                                    |
@@ -178,6 +177,7 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
 | `sclera.filename`                   | Optional sclera texture                                                            |
 | `eyelid.upperFilename`              | Optional custom lid images (upper, lower; must match display)                      |
 | `eyelid.normalClosure`              | Eyelid coverage fraction at rest (0.0–1.0). Default: `0.0`                         |
+| `eyelid.tracking`                   | Eyelids track pupil vertical position. Default: `true`                             |
 
 `eyelid.normalClosure` sets how much the lids close over the eye in the resting-open position. A value of `0.15` means the lids cover 15 % of the eye radius at rest. `eyesWide()` bypasses this offset and retracts the lids fully to 1.0, making the expression visually distinct from the normal resting gap. The supplied eye definitions use `0.15` (default\_eye), `0.20` (human\_eye), and `0.05` (eagle).
 

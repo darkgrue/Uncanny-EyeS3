@@ -97,7 +97,7 @@ void AMOLEDDisplay::drawRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_
       w++;
     if (h % 2 != 0)
       h++;
-    m_gfx->draw16bitBeRGBBitmap(x, y, bitmap, w, h);
+    m_gfx->draw16bitRGBBitmap(x, y, bitmap, w, h);
   }
 }
 
@@ -145,7 +145,7 @@ void AMOLEDDisplay::drawSubRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int
     dst += dstW;
   }
 
-  m_gfx->draw16bitBeRGBBitmap(x, y, subBuf, dstW, dstH);
+  m_gfx->draw16bitRGBBitmap(x, y, subBuf, dstW, dstH);
 }
 
 /** @brief Draw a bitmap asynchronously (delegates to synchronous draw). */
@@ -153,7 +153,7 @@ bool AMOLEDDisplay::drawRGBBitmapAsync(int16_t x, int16_t y, uint16_t *bitmap, i
 {
   if (!m_gfx || !bitmap)
     return true;
-  m_gfx->draw16bitBeRGBBitmap(x, y, bitmap, w, h);
+  m_gfx->draw16bitRGBBitmap(x, y, bitmap, w, h);
   return true;
 }
 

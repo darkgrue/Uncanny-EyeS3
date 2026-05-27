@@ -32,31 +32,34 @@ python resources/tools/geneye.py -all
 ### Execution Model
 
 The firmware runs on two FreeRTOS cores:
+
 - **Core 1** (`renderLoopTask`): Eye animation at ~120 FPS. Calls `EyeAnimator::update()`, polls the light sensor, broadcasts ESP-NOW state, and calls `EyeRenderer::renderFrame()` when dirty.
 - **Core 0** (Arduino `loop()`): Lightweight status reporting every 5 seconds and serial command handling (`E<n>` to switch eye index).
 
 ### Subsystem Layers
 
-```
+```text
 main.cpp
-├── EyeAnimator          — central state machine (eye/EyeAnimator.h)
-│   ├── EyeRenderer      — per-pixel polar-map rendering, double-buffered PSRAM (eye/EyeRenderer.h)
-│   │   └── EyelidRenderer — eyelid shape rendering (eye/EyelidRenderer.h)
-│   ├── EyeMovement      — saccadic movement, lognormal distribution (animation/EyeMovement.h)
-│   ├── BlinkFSM         — blink state machine NOBLINK/ENBLINK/DEBLINK (animation/BlinkFSM.h)
-│   ├── InputBase        — abstract input interface (input/InputBase.h)
-│   │   └── WiiChuckInput — Wii Nunchuk I2C driver (input/WiiChuck.h)
-│   ├── LightSensor      — photoresistor pupil control (input/LightSensor.h)
-│   └── EyeSyncManager   — ESP-NOW controller/follower sync (network/EyeSync.h)
-├── DisplayHAL           — abstract display interface (common/DisplayHAL.h)
-│   ├── AMOLEDDisplay    — CO5300 QSPI driver (display/AMOLEDDisplay.h)
-│   └── TRGBDisplay      — ST7701S DPI driver (display/TRGBDisplay.h)
-└── DebugOverlay         — FPS/battery HUD (debug/DebugOverlay.h)
+├── EyeAnimator          — central state machine (src/eye/EyeAnimator.h)
+│   ├── EyeRenderer      — per-pixel polar-map rendering, double-buffered PSRAM (src/eye/EyeRenderer.h)
+│   │   └── EyelidRenderer — eyelid shape rendering (src/eye/EyelidRenderer.h)
+│   ├── EyeMovement      — saccadic movement, lognormal distribution (src/animation/EyeMovement.h)
+│   ├── BlinkFSM         — blink state machine NOBLINK/ENBLINK/DEBLINK (src/animation/BlinkFSM.h)
+│   ├── InputBase        — abstract input interface (src/input/InputBase.h)
+│   │   ├── WiiChuckInput — Wii Nunchuk I2C driver (src/input/WiiChuck.h)
+│   │   └── GestureFaceInput — DFRobot face-tracking input (src/input/GestureFaceInput.h)
+│   ├── LightSensor      — photoresistor pupil control (src/input/LightSensor.h)
+│   └── EyeSyncManager   — ESP-NOW controller/follower sync (src/network/EyeSync.h)
+├── DisplayHAL           — abstract display interface (src/common/DisplayHAL.h)
+│   ├── AMOLEDDisplay    — CO5300 QSPI driver (src/display/AMOLEDDisplay.h)
+│   └── TRGBDisplay      — ST7701S DPI driver (src/display/TRGBDisplay.h)
+├── SDConfig             — SD card config loader (src/config/SDConfig.h)
+└── DebugOverlay         — FPS/battery HUD (src/debug/DebugOverlay.h)
 ```
 
 ### Eye Definition Pipeline
 
-Eye definitions go through a four-step process before use:
+Eye definitions go through a five-step process before use:
 
 1. **JSON config** (`.eye` files in `resources/eyes/<name>/`): Fractional values (0.0–1.0) relative to display size. Texture/eyelid images referenced as relative paths in the same directory.
 
@@ -71,16 +74,17 @@ Eye definitions go through a four-step process before use:
 ### Key Data Structures
 
 - **`EyeDefinition`** (`include/eyes.h`): Top-level eye descriptor — contains `PupilConfig`, `IrisConfig`, `ScleraConfig`, `EyelidConfig`, `PolarMapInfo`, and a `dispMap` pointer to the spherical displacement table.
-- **`EyeSyncMessage`** (`common/EyeState.h`): ESP-NOW payload — eye X/Y, pupil factor, blink state, timestamp, and expression command.
-- **`EyeProjectConfig`** (`eye/EyeConfig.h`): Runtime config struct passed during initialization.
+- **`EyeSyncMessage`** (`src/common/EyeState.h`): ESP-NOW payload — eye X/Y, pupil factor, blink state, timestamp, and expression command.
+- **`EyeProjectConfig`** (`src/eye/EyeConfig.h`): Runtime config struct passed during initialization.
 
 ### Multi-Eye Sync (ESP-NOW)
 
-The first device with an active WiiChuck input (joystick beyond dead zone) becomes the controller and broadcasts `EyeSyncMessage` to followers. Followers call `EyeInterpolator::updateTarget()` and interpolate received state. If no WiiChuck is present, all devices run autonomous animation independently.
+The first device with an active WiiChuck input (joystick beyond dead zone) becomes the controller and broadcasts `EyeSyncMessage` to followers. Followers receive state via an `OnDataReceived` callback registered on `EyeSyncManager` and interpolate it for smooth local animation. If no WiiChuck is present, all devices run autonomous animation independently.
 
 ### Board Selection
 
 Board-specific code is gated on:
+
 - `ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED` — set by `-D` flag in `[env:amoled]`
 - `ARDUINO_LILYGO_T_RGB` — set by `-D` flag in `[env:trgb]`
 
@@ -92,16 +96,30 @@ Pin definitions are in `include/BoardPins.h`. I2C pins differ between boards (AM
 
 ## Build Flags
 
-Key flags set in `[esp32base]`:
-- `-D FDEBUG` — enables debug logging
-- `-D DEBUG_OVERLAY_ENABLED` — enables FPS/battery HUD
+Flags set in `[esp32base]` (both environments inherit via `extends`):
+
+Active by default:
+
 - `-D CORE_DEBUG_LEVEL=3` — ESP-IDF log verbosity
 
-Both environments inherit from `[esp32base]` via `extends`.
+Optional (commented out in `platformio.ini`, add to enable):
+
+- `-D FDEBUG` — enables debug serial output
+- `-D DEBUG_OVERLAY_ENABLED` — enables FPS/battery HUD on display
+- `-D DEBUG_FPS_ENABLED` — enables FPS output on serial
 
 ## Pre/Post Build Scripts
 
+Pre-build:
+
 - `scripts/remove_defs.py` — removes stale macro definitions before build
-- `scripts/rename_firmware.py` — renames output `.bin` with version/board suffix
+- `scripts/rename_firmware.py` — sets version/board suffix on the output `.bin`
+
+Post-build:
+
 - `scripts/patch_libdeps.py` — patches library dependencies post-install
 - `scripts/build_unified_binary.py` — merges bootloader + partition table + app into a single flashable binary
+- `scripts/gen_eyes_all.py` — auto-runs eye header generation (equivalent to `geneye.py -all`)
+- `scripts/gen_display_tables_all.py` — auto-runs display table generation (equivalent to `tablegen.py -all`)
+
+The two post-build generator scripts mean the manual `tablegen.py` and `geneye.py` commands in the Build Commands section above are only needed outside of a normal build (e.g., when iterating on eye configs without a full rebuild).

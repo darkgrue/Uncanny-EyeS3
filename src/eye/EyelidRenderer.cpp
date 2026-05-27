@@ -1,13 +1,12 @@
 /**
  * @file EyelidRenderer.cpp
- * @brief Eyelid animation renderer with smoothstep tracking and squint.
+ * @brief Eyelid animation renderer with smoothstep tracking.
  *
  * Renders upper and lower eyelids as overlays on the eye frame buffer.
  * Supports two modes: custom eyelid tables from the eye definition, and
  * a math-based curved boundary fallback. Eyelid position tracks the pupil
- * (upper moves down when looking up, lower moves up when looking down) and
- * squinting reduces the eyelid gap. Uses smoothstep easing for smooth
- * animation transitions between positions.
+ * (upper moves down when looking up, lower moves up when looking down).
+ * Uses smoothstep easing for smooth animation transitions between positions.
  */
 #include "EyelidRenderer.h"
 #include "animation/EyeMovement.h"
@@ -15,7 +14,7 @@
 
 EyelidRenderer::EyelidRenderer()
     : m_displaySize(0), m_eyeRadius(0), m_config(nullptr),
-      m_hasCustomEyelids(false), m_trackingEnabled(true), m_squint(false),
+      m_hasCustomEyelids(false), m_trackingEnabled(true),
       m_smoothedUpperFactor(1.0f), m_smoothedLowerFactor(1.0f),
       m_prevUpperY(0.5f), m_prevLowerY(0.5f), m_eyelidColor(0)
 {
@@ -64,16 +63,13 @@ void EyelidRenderer::begin(int displaySize, uint16_t eyeRadius, const EyelidConf
 /**
  * @brief Compute smoothed eyelid factors from eye position and blink gap.
  *
- * Applies squint, advances exponential tracking smoothing, and computes
+ * Advances exponential tracking smoothing and computes
  * m_smoothedUpperFactor / m_smoothedLowerFactor. Stores the eye center so
  * drawEyelids() can paint without re-deriving it. Call before the main
  * render loop so getUpperRow()/getLowerRow() are valid for row skipping.
  */
 void EyelidRenderer::prepareFactors(float eyeX, float eyeY, float eyelidGap)
 {
-  if (m_squint)
-    eyelidGap *= EYELID_SQUINT_FACTOR;
-
   // Smooth only the tracking offsets — BlinkFSM already eases the blink factor,
   // so re-smoothing it here would prevent the eyelids from ever fully closing.
   float targetUpperTracking = m_trackingEnabled ? -eyeY * EYELID_UPPER_TRACK_STRENGTH * 0.5f : 0.0f;

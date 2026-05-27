@@ -35,7 +35,7 @@
 
 #define CURRENT_EYE default_eye::eye
 
-// #define DEBUG_FPS_ENABLED           // Comment out to suppress FPS diagnostic messages on serial
+ #define DEBUG_FPS_ENABLED           // Comment out to suppress FPS diagnostic messages on serial
 // #define PCF85063_DIAGNOSTIC_ENABLED // Comment out to suppress PCF85063 diagnostic status output on serial
 // #define SY6970_DIAGNOSTIC_ENABLED   // Comment out to suppress SY6970 diagnostic status output on serial
 
@@ -67,6 +67,8 @@ std::unique_ptr<Arduino_IIC> PCF85063(new Arduino_PCF85063(IIC_Bus, PCF85063_DEV
                                                            DRIVEBUS_DEFAULT_VALUE, DRIVEBUS_DEFAULT_VALUE));
 
 void renderLoopTask(void *param);
+void user_setup();
+void user_loop();
 
 /**
  * @brief Scan for I2C devices connected to a given I2C bus.
@@ -487,13 +489,13 @@ void setup()
     s_animator->setSyncManager(s_syncManager);
   }
 
-  s_animator->setPupilRange(0.45f, 0.8f);
-
 #ifdef DEBUG_OVERLAY_ENABLED
   s_debugOverlay.begin(s_display);
   s_debugOverlay.setEnabled(true);
   s_debugOverlay.setBatteryPin(4, 0, 4095);
 #endif
+
+  user_setup();
 
   Serial.println("\nInitialization complete!\n");
 
@@ -551,6 +553,7 @@ void renderLoopTask(void *param)
       }
 
       s_animator->broadcastState();
+      user_loop();
 
       if (s_animator->needsRender())
       {

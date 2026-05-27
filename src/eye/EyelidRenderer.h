@@ -1,6 +1,6 @@
 /**
  * @file EyelidRenderer.h
- * @brief Eyelid animation renderer with tracking and squint support.
+ * @brief Eyelid animation renderer with position tracking.
  *
  * Draws upper and lower eyelids with smooth tracking of pupil position, and
  * supports a squint modifier for expressive animations. Can use default
@@ -20,7 +20,7 @@
  *
  * Supports two modes: default procedural eyelids (circular arc) and custom
  * eyelids from the EyeDefinition. Eyelid position tracks pupil to create a
- * natural "looking up/down" effect. Squinting reduces the eyelid gap.
+ * natural "looking up/down" effect.
  */
 class EyelidRenderer
 {
@@ -38,16 +38,19 @@ public:
   /** @brief Enable/disable eyelid tracking of pupil position. */
   void setTrackingEnabled(bool enabled) { m_trackingEnabled = enabled; }
 
-  /** @brief Enable/disable squint expression. */
-  void setSquint(bool squint) { m_squint = squint; }
-
   /**
-   * @brief Render eyelids into the frame buffer.
-   * @param eyeX Current eye X position.
-   * @param eyeY Current eye Y position.
-   * @param eyelidGap Open fraction (0.0 = fully closed, 1.0 = fully open).
-   * @param frameBuffer Pointer to the RGB565 frame buffer.
+   * @brief Compute smoothed eyelid factors from eye position and blink gap.
+   *
+   * Call before the main render loop so getUpperRow()/getLowerRow() return
+   * valid bounds for eyelid-zone row skipping. Stores the eye center and
+   * computed gap for subsequent drawEyelids().
    */
+  void prepareFactors(float eyeX, float eyeY, float eyelidGap);
+
+  /** @brief Paint eyelid pixels into the frame buffer. Call after the main render loop. */
+  void drawEyelids(uint16_t *frameBuffer);
+
+  /** @brief Convenience wrapper: prepareFactors() then drawEyelids() in one call. */
   void render(float eyeX, float eyeY, float eyelidGap, uint16_t *frameBuffer);
 
   /** @brief Current upper eyelid factor after smoothing. */
@@ -56,20 +59,20 @@ public:
   /** @brief Current lower eyelid factor after smoothing. */
   float getLowerLidFactor() const { return m_smoothedLowerFactor; }
 
+  /** @brief Pixel row of the upper eyelid boundary (valid after prepareFactors()). */
+  int getUpperRow(int displaySize) const { return (int)(m_smoothedUpperFactor * displaySize); }
+
+  /** @brief Pixel row of the lower eyelid boundary (valid after prepareFactors()). */
+  int getLowerRow(int displaySize) const { return (int)(m_smoothedLowerFactor * displaySize); }
+
 private:
   /** @brief Draw default circular arc eyelids. */
   void renderDefaultEyelids(int centerX, int centerY, float upperY, float lowerY,
                             uint16_t *buffer, int size, uint16_t color);
 
   /** @brief Draw custom eyelid shapes from eye definition. */
-  void renderCustomEyelids(float blinkFactor, int centerX, int centerY,
+  void renderCustomEyelids(float eyelidGap, int centerX, int centerY,
                            uint16_t *buffer, int size, uint16_t color);
-
-  /** @brief Compute Y position of upper eyelid given eye position and gap. */
-  float calculateUpperLidY(float eyeY, float gap);
-
-  /** @brief Compute Y position of lower eyelid given eye position and gap. */
-  float calculateLowerLidY(float eyeY, float gap);
 
   int m_displaySize = 0; // Display dimension in pixels
   int m_eyeRadius = 0;   // Eye circle radius
@@ -78,15 +81,16 @@ private:
 
   bool m_hasCustomEyelids = false; // True if eye has custom eyelid data
   bool m_trackingEnabled = true;   // Enable pupil tracking
-  bool m_squint = false;           // Apply squint modifier
 
   float m_smoothedUpperFactor = 1.0f; // Smoothed upper eyelid factor
   float m_smoothedLowerFactor = 1.0f; // Smoothed lower eyelid factor
 
-  float m_prevUpperY = 0.5f; // Previous upper Y for smoothing
-  float m_prevLowerY = 0.5f; // Previous lower Y for smoothing
+  float m_prevUpperY = 0.0f; // Smoothed tracking offset for upper eyelid
+  float m_prevLowerY = 0.0f; // Smoothed tracking offset for lower eyelid
 
   uint16_t m_eyelidColor = 0; // Eyelid RGB565 color
+  int m_eyeCenterX = 0;       // Eye center X stored by prepareFactors()
+  int m_eyeCenterY = 0;       // Eye center Y stored by prepareFactors()
 };
 
 #endif // EYELID_RENDERER_H

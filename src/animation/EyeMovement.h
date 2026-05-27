@@ -173,8 +173,8 @@
 #define EYE_MOVE_DURATION_MAX          500
 
 // Fixation pause between saccades (ms)
-#define EYE_MOVE_FIXATION_PAUSE_MIN    12000
-#define EYE_MOVE_FIXATION_PAUSE_MAX    50000
+#define EYE_MOVE_FIXATION_PAUSE_MIN    3000
+#define EYE_MOVE_FIXATION_PAUSE_MAX    12000
 
 // Delay before resuming saccades after losing an external target (ms)
 #define EYE_MOVE_SACCADE_DELAY         4000

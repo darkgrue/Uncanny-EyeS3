@@ -30,9 +30,9 @@
 struct PupilConfig
 {
   uint16_t color;
-  uint8_t slitRadius; // 0 = round pupil
-  float minFraction;  // min pupil size as fraction of iris radius
-  float maxFraction;  // max pupil size as fraction of iris radius
+  float slitRadius;  // 0.0 = round pupil; fraction of iris radius for slit half-height
+  float minFraction; // min pupil size as fraction of iris radius
+  float maxFraction; // max pupil size as fraction of iris radius
 };
 
 /**
@@ -82,6 +82,7 @@ struct EyelidConfig
   uint16_t color;
   float normalClosure;     // eyelid coverage at rest (0.0=fully open, 1.0=fully closed)
   float wideClosure;       // eyelid coverage when wide/surprised (0.0=fully retracted, 1.0=fully closed)
+  bool tracking;           // eyelids track pupil vertical position
 };
 
 /**
@@ -105,7 +106,6 @@ struct EyeDefinition
   const char *name;
   float radiusFraction; // eye radius as fraction of smaller screen dimension
   uint16_t backColor;
-  bool tracking;
   uint8_t squint;
   const uint8_t *dispMap; // spherical displacement map
 

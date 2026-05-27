@@ -38,25 +38,6 @@ public:
   bool begin(DisplayHAL *display, const EyeDefinition &eyeDef);
 
   /**
-   * @brief Render a single display column of the eye.
-   *
-   * Used internally by the column-buffer rendering path for optimal QSPI throughput.
-   *
-   * @param x Column index (0 to displaySize-1).
-   * @param eyeX Normalized eye X (-1.0 to +1.0).
-   * @param eyeY Normalized eye Y (-1.0 to +1.0).
-   * @param pupilFactor Pupil constriction (0.0 dilated, 1.0 constricted).
-   * @param upperLidFactor Upper eyelid position (0.0 = closed, 1.0 = open).
-   * @param lowerLidFactor Lower eyelid position (0.0 = closed, 1.0 = open).
-   * @param eyelidGap Eyelid open fraction (0.0 = fully closed, 1.0 = fully retracted).
-   * @param irisAngle Iris rotation in degrees.
-   * @param scleraAngle Sclera rotation in degrees.
-   */
-  void renderColumn(int x, float eyeX, float eyeY, float pupilFactor,
-                    float upperLidFactor, float lowerLidFactor, float eyelidGap,
-                    uint16_t irisAngle, uint16_t scleraAngle);
-
-  /**
    * @brief Render the complete eye frame into the render buffer.
    *
    * Computes the dirty region for the current frame, clears the previous position,
@@ -65,15 +46,6 @@ public:
   void renderFrame(float eyeX, float eyeY, float pupilFactor,
                    float upperLidFactor, float lowerLidFactor, float eyelidGap,
                    uint16_t irisAngle, uint16_t scleraAngle);
-
-  /**
-   * @brief Column-buffer rendering path for QSPI displays.
-   *
-   * Renders one column at a time to improve DMA transfer efficiency.
-   */
-  void renderFrameUsingColumns(float eyeX, float eyeY, float pupilFactor,
-                               float upperLidFactor, float lowerLidFactor, float eyelidGap,
-                               uint16_t irisAngle, uint16_t scleraAngle);
 
   /** @brief Raw access to the current frame buffer for display transfer. */
   uint16_t *getFrameBuffer() { return m_displayBuf; }
