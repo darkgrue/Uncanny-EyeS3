@@ -107,25 +107,27 @@ private:
   // Dirty region tracking
   int m_dirtyMinX, m_dirtyMinY; // Current frame dirty bounds
   int m_dirtyMaxX, m_dirtyMaxY;
-  int m_prevDirtyMinX, m_prevDirtyMinY; // Previous frame dirty bounds
-  int m_prevDirtyMaxX, m_prevDirtyMaxY;
+  // Per-buffer previous dirty rect: [0]=frameBuf1, [1]=frameBuf2.
+  // Each buffer alternates every frame, so its stale content is from 2 frames ago,
+  // not 1. Tracking separately prevents clearing the wrong region.
+  int m_prevDirtyMinX[2] = {0, 0};
+  int m_prevDirtyMinY[2] = {0, 0};
+  int m_prevDirtyMaxX[2] = {0, 0};
+  int m_prevDirtyMaxY[2] = {0, 0};
 
   uint16_t m_backgroundColor = 0x0000; // Clear color (black)
 
   CircularClip m_clip; // Precomputed circular clip region
 
-  /**
-   * @brief Scratch buffer for display bus transfers.
-   *
-   * Pre-allocated to avoid per-frame heap allocation. Sized for a full
-   * 466x466 frame buffer (maximum display size supported).
-   */
-  static constexpr int SCRATCH_BUF_SIZE = 466 * 466;
-  uint16_t *m_scratchBuf = nullptr;
-
   EyelidRenderer m_eyelidRenderer; // Manages eyelid rendering
 
   bool m_hasCustomLids = false; // Cached: true when eyelid tables have non-trivial data
+
+  // DRAM caches for lookup tables — eliminates flash and PSRAM latency in the hot render loop.
+  uint16_t *m_irisTexCache    = nullptr; // DRAM copy of iris texture
+  uint16_t *m_scleraTexCache  = nullptr; // DRAM copy of sclera texture
+  uint8_t  *m_angleMapCache   = nullptr; // DRAM copy of polar angle map
+  uint8_t  *m_radiusMapCache  = nullptr; // DRAM radius lookup: radiusMap[qy*r + qx] = sqrt(qx²+qy²)
 };
 
 #endif // EYE_RENDERER_H

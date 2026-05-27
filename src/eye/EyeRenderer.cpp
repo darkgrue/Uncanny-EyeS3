@@ -37,7 +37,6 @@ EyeRenderer::EyeRenderer()
     : m_display(nullptr), m_displaySize(0), m_mapRadius(0), m_mapDiameter(0), m_eyeDef(nullptr),
       m_frameBuf1(nullptr), m_frameBuf2(nullptr), m_renderBuf(nullptr), m_displayBuf(nullptr),
       m_dirtyMinX(0), m_dirtyMinY(0), m_dirtyMaxX(0), m_dirtyMaxY(0),
-      m_prevDirtyMinX(0), m_prevDirtyMinY(0), m_prevDirtyMaxX(0), m_prevDirtyMaxY(0),
       m_eyelidRenderer()
 {
 }
@@ -127,11 +126,13 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
   m_dirtyMinY = 0;
   m_dirtyMaxX = m_displaySize;
   m_dirtyMaxY = m_displaySize;
-  // Empty rect: both buffers are zeroed by memset above, so no stale content to clear.
-  m_prevDirtyMinX = m_displaySize / 2;
-  m_prevDirtyMinY = m_displaySize / 2;
-  m_prevDirtyMaxX = m_displaySize / 2;
-  m_prevDirtyMaxY = m_displaySize / 2;
+  // Both buffers were just zeroed by memset, so no stale content exists.
+  // Initialize each buffer's prevDirty to an empty rect (min == max).
+  int mid = m_displaySize / 2;
+  m_prevDirtyMinX[0] = m_prevDirtyMinX[1] = mid;
+  m_prevDirtyMinY[0] = m_prevDirtyMinY[1] = mid;
+  m_prevDirtyMaxX[0] = m_prevDirtyMaxX[1] = mid;
+  m_prevDirtyMaxY[0] = m_prevDirtyMaxY[1] = mid;
 
   Serial.printf("[EyeRenderer] Double buffers allocated: %zu bytes each (PSRAM)\n", bufSize);
 
@@ -290,23 +291,25 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   if (maxY > m_displaySize)
     maxY = m_displaySize;
 
-  // Save this frame's eye-only dirty rect, then expand the render region to cover
-  // the previous dirty rect so stale pixels from 2 frames ago are overwritten.
-  // The render loop naturally fills bgColorBE for all non-circle pixels in the box.
+  // Each buffer alternates every other frame, so its last content is from 2 frames ago.
+  // Select prevDirty for this specific buffer so we expand the render region correctly.
+  int bufIdx = (m_renderBuf == m_frameBuf1) ? 0 : 1;
   int eyeMinX = minX, eyeMinY = minY, eyeMaxX = maxX, eyeMaxY = maxY;
-  if (m_prevDirtyMinX < m_prevDirtyMaxX)
+  if (m_prevDirtyMinX[bufIdx] < m_prevDirtyMaxX[bufIdx])
   {
-    if (m_prevDirtyMinX < minX) minX = m_prevDirtyMinX;
-    if (m_prevDirtyMinY < minY) minY = m_prevDirtyMinY;
-    if (m_prevDirtyMaxX > maxX) maxX = m_prevDirtyMaxX;
-    if (m_prevDirtyMaxY > maxY) maxY = m_prevDirtyMaxY;
+    if (m_prevDirtyMinX[bufIdx] < minX) minX = m_prevDirtyMinX[bufIdx];
+    if (m_prevDirtyMinY[bufIdx] < minY) minY = m_prevDirtyMinY[bufIdx];
+    if (m_prevDirtyMaxX[bufIdx] > maxX) maxX = m_prevDirtyMaxX[bufIdx];
+    if (m_prevDirtyMaxY[bufIdx] > maxY) maxY = m_prevDirtyMaxY[bufIdx];
   }
-  m_prevDirtyMinX = eyeMinX;
-  m_prevDirtyMinY = eyeMinY;
-  m_prevDirtyMaxX = eyeMaxX;
-  m_prevDirtyMaxY = eyeMaxY;
+  m_prevDirtyMinX[bufIdx] = eyeMinX;
+  m_prevDirtyMinY[bufIdx] = eyeMinY;
+  m_prevDirtyMaxX[bufIdx] = eyeMaxX;
+  m_prevDirtyMaxY[bufIdx] = eyeMaxY;
 
   int eyeRadiusSq = (int)eyeRadius * (int)eyeRadius;
+  int irisRadiusSq = (int)irisRadius * (int)irisRadius;
+  int pupilRadiusSq = (int)pupilRadius * (int)pupilRadius;
 
   // Slit pupil: precompute per-frame boundary constants.
   // The boundary at the current pupil opening is a circular arc that passes
@@ -430,33 +433,32 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
     for (int x = xCircStart; x < xCircEnd; x++)
     {
       int dx = x - eyeCenterX;
-
-      // Hoist qx and r before the iris/sclera branch to avoid duplicate computation.
-      int qx = dx < 0 ? -dx : dx;
-      if (qx >= m_mapRadius) qx = m_mapRadius - 1;
-      int r = radiusRow ? (int)radiusRow[qx] : (int)sqrtf((float)(dx * dx + dySq));
+      int distSq = dx * dx + dySq;
 
       uint16_t color;
 
       float slitDdxSq = 0.0f;
       if (hasSlit)
       {
-        float ddx = (float)qx - slitXc;
+        float px = (float)(dx < 0 ? -dx : dx);
+        float ddx = px - slitXc;
         slitDdxSq = ddx * ddx;
       }
 
       const bool inPupil = hasSlit
-          ? (r <= (int)irisRadius && slitDdxSq + slitDySq <= slitRcSq)
-          : (r <= (int)pupilRadius);
+          ? (distSq <= irisRadiusSq && slitDdxSq + slitDySq <= slitRcSq)
+          : (distSq <= pupilRadiusSq);
 
       if (inPupil)
       {
         color = pupilColorBE;
       }
-      else if (r <= (int)irisRadius)
+      else if (distSq <= irisRadiusSq)
       {
         if (hasIrisTex)
         {
+          int qx = dx < 0 ? -dx : dx;
+          if (qx >= m_mapRadius) qx = m_mapRadius - 1;
           uint8_t ta = angleRow[qx];
 
           // Reconstruct full 0-255 CW angle from north using quadrant symmetry.
@@ -467,6 +469,7 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
           else if (dx <  0)           fullAngle = (uint8_t)(     - (ta >> 1)); // NW
           else                        fullAngle = (uint8_t)(       (ta >> 1)); // NE
 
+          int r = radiusRow ? (int)radiusRow[qx] : (int)sqrtf((float)distSq);
           int texU = (uint8_t)(fullAngle + irisRot) * irisTexW / 256;
           int texV = (int)(((uint32_t)r * irisTexVMul) >> 16);
           if (texV >= irisTexH) texV = irisTexH - 1;
@@ -481,6 +484,8 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
       {
         if (hasScleraTex)
         {
+          int qx = dx < 0 ? -dx : dx;
+          if (qx >= m_mapRadius) qx = m_mapRadius - 1;
           uint8_t ta = angleRow[qx];
 
           uint8_t fullAngle;
@@ -489,6 +494,7 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
           else if (dx <  0)           fullAngle = (uint8_t)(     - (ta >> 1));
           else                        fullAngle = (uint8_t)(       (ta >> 1));
 
+          int r = radiusRow ? (int)radiusRow[qx] : (int)sqrtf((float)distSq);
           int texU = (uint8_t)(fullAngle + scleraRot) * scleraTexW / 256;
           int rv = r - irisRadius;
           if (rv < 0) rv = 0;
