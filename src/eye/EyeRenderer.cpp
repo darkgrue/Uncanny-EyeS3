@@ -292,10 +292,6 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
     return;
   }
 
-  // Block until the previous frame's transfer completes so we can safely write
-  // into the buffer the task just finished with.
-  xSemaphoreTake(m_xferDone, portMAX_DELAY);
-
   const EyeDefinition &eye = *m_eyeDef;
 
   uint16_t eyeRadius = eyeRadiusPixels(eye);
@@ -547,6 +543,10 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   m_dirtyMinY = eyeMinY;
   m_dirtyMaxX = eyeMaxX;
   m_dirtyMaxY = eyeMaxY;
+
+  // Wait for the previous transfer to finish before swapping the buffer it's reading.
+  // Render (above) runs concurrently with the transfer — we only synchronize at swap time.
+  xSemaphoreTake(m_xferDone, portMAX_DELAY);
 
   uint16_t *temp = m_renderBuf;
   m_renderBuf = m_displayBuf;
