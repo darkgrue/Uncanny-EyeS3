@@ -15,6 +15,9 @@
 #include "eyes.h"
 #include "EyelidRenderer.h"
 #include <cstring>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <freertos/task.h>
 
 /**
  * @brief Renders a single eye using precomputed displacement and polar maps.
@@ -100,6 +103,13 @@ private:
   uint16_t *m_scleraTexCache  = nullptr; // DRAM copy of sclera texture
   uint8_t  *m_angleMapCache   = nullptr; // DRAM copy of polar angle map
   uint8_t  *m_radiusMapCache  = nullptr; // DRAM radius lookup: radiusMap[qy*r + qx] = sqrt(qx²+qy²)
+
+  // Async transfer task pinned to Core 0 — overlaps the next render with the current transfer.
+  TaskHandle_t      m_xferTask  = nullptr;
+  SemaphoreHandle_t m_xferReady = nullptr; // render→task: new frame ready to send
+  SemaphoreHandle_t m_xferDone  = nullptr; // task→render: transfer complete
+  volatile uint32_t m_xferUs    = 0;       // last measured transfer time (updated by task)
+  static void       xferTaskFunc(void *pv);
 };
 
 #endif // EYE_RENDERER_H

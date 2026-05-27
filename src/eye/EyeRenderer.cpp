@@ -37,7 +37,7 @@ EyeRenderer::EyeRenderer()
     : m_display(nullptr), m_displaySize(0), m_mapRadius(0), m_mapDiameter(0), m_eyeDef(nullptr),
       m_frameBuf1(nullptr), m_frameBuf2(nullptr), m_renderBuf(nullptr), m_displayBuf(nullptr),
       m_dirtyMinX(0), m_dirtyMinY(0), m_dirtyMaxX(0), m_dirtyMaxY(0),
-      m_eyelidRenderer()
+      m_eyelidRenderer(), m_xferTask(nullptr), m_xferReady(nullptr), m_xferDone(nullptr), m_xferUs(0)
 {
 }
 
@@ -73,6 +73,9 @@ EyeRenderer::~EyeRenderer()
     heap_caps_free(m_radiusMapCache);
     m_radiusMapCache = nullptr;
   }
+  if (m_xferTask)  { vTaskDelete(m_xferTask);       m_xferTask  = nullptr; }
+  if (m_xferReady) { vSemaphoreDelete(m_xferReady); m_xferReady = nullptr; }
+  if (m_xferDone)  { vSemaphoreDelete(m_xferDone);  m_xferDone  = nullptr; }
 }
 
 /**
@@ -143,6 +146,13 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
 
   // Cache PROGMEM textures in PSRAM to eliminate flash cache-miss latency in the hot render loop.
   // Flash random-access penalty is ~1500 ns/miss vs ~80 ns/miss for PSRAM — up to 20× speedup.
+
+  // If an async transfer is in-flight (eye switch), wait for it to finish before
+  // releasing caches — the task holds a pointer into m_displayBuf and the cache arrays.
+  if (m_xferDone) {
+    xSemaphoreTake(m_xferDone, portMAX_DELAY);
+    xSemaphoreGive(m_xferDone); // restore so the first renderFrame() can take it
+  }
 
   // Release any previous caches (called on eye switch).
   if (m_irisTexCache)   { heap_caps_free(m_irisTexCache);   m_irisTexCache   = nullptr; }
@@ -228,7 +238,29 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
     }
   }
 
+  // Create async transfer task once; it survives eye-switch calls to begin().
+  if (!m_xferDone) {
+    m_xferReady = xSemaphoreCreateBinary();
+    m_xferDone  = xSemaphoreCreateBinary();
+    xSemaphoreGive(m_xferDone); // pre-signal: first frame has no prior transfer to wait on
+    xTaskCreatePinnedToCore(xferTaskFunc, "eyeXfer", 4096, this, 5, &m_xferTask, 0);
+    Serial.println("[EyeRenderer] Async transfer task created on Core 0");
+  }
+
   return true;
+}
+
+void EyeRenderer::xferTaskFunc(void *pv)
+{
+  EyeRenderer *self = static_cast<EyeRenderer *>(pv);
+  for (;;) {
+    xSemaphoreTake(self->m_xferReady, portMAX_DELAY);
+    uint32_t t0 = micros();
+    self->m_display->directTransfer(self->m_displayBuf, 0, 0, 0, 0,
+                                    self->m_displaySize, self->m_displaySize);
+    self->m_xferUs = micros() - t0;
+    xSemaphoreGive(self->m_xferDone);
+  }
 }
 
 /**
@@ -259,6 +291,10 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
     Serial.println("[EyeRenderer] ERROR: null pointer!");
     return;
   }
+
+  // Block until the previous frame's transfer completes so we can safely write
+  // into the buffer the task just finished with.
+  xSemaphoreTake(m_xferDone, portMAX_DELAY);
 
   const EyeDefinition &eye = *m_eyeDef;
 
@@ -381,9 +417,9 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   static uint32_t s_t0 = 0;
   s_t0 = micros();
 
-  // Row-major loop: fills background pixels and renders eye pixels in a single pass,
-  // eliminating the separate std::fill pass that previously double-wrote ~163k pixels
-  // to PSRAM (once from fill, once from render). Saves ~40% of total PSRAM writes.
+  // Row-major loop: sequential PSRAM writes per row dominate over texture cache effects.
+  // Column-major was tested (2026-05-27) and regressed: strided PSRAM writes (+17ms default,
+  // +7ms eagle) outweigh the texture cache benefit from angle-major layout.
   for (int y = minY; y < maxY; y++)
   {
     uint16_t *rowBuf = m_renderBuf + y * m_displaySize;
@@ -516,21 +552,19 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   m_renderBuf = m_displayBuf;
   m_displayBuf = temp;
 
-  // Frame buffer is pre-byte-swapped (big-endian) — use directTransfer → writeBytes
-  // to send via PSRAM DMA without the DRAM copy that writePixels requires.
-  m_display->directTransfer(m_displayBuf, 0, 0, 0, 0, m_displaySize, m_displaySize);
-
-  uint32_t t2 = micros();
+  // Hand the freshly rendered buffer to the transfer task (Core 0).
+  // The task calls directTransfer, measures duration into m_xferUs, then signals m_xferDone.
+  xSemaphoreGive(m_xferReady);
 
   static uint32_t s_lastTimingPrint = 0;
-  static uint32_t s_renderUs = 0, s_transferUs = 0;
-  s_renderUs   = t1 - s_t0;
-  s_transferUs = t2 - t1;
+  static uint32_t s_renderUs = 0;
+  s_renderUs = t1 - s_t0;
   if (millis() - s_lastTimingPrint > 2000)
   {
-    Serial.printf("[Timing] render=%luus transfer=%luus total=%luus (~%lu FPS)\n",
-                  s_renderUs, s_transferUs, s_renderUs + s_transferUs,
-                  (s_renderUs + s_transferUs) > 0 ? 1000000u / (s_renderUs + s_transferUs) : 0);
+    uint32_t xferUs = m_xferUs; // snapshot — written by task, one frame behind
+    Serial.printf("[Timing] render=%luus xfer=%luus (~%lu FPS)\n",
+                  s_renderUs, xferUs,
+                  s_renderUs > 0 ? 1000000u / s_renderUs : 0);
     s_lastTimingPrint = millis();
   }
 }
