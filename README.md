@@ -59,20 +59,25 @@ pio device monitor
 
 ### Rendering Pipeline
 
-The firmware runs two FreeRTOS tasks on separate cores:
+The firmware runs FreeRTOS tasks across two cores:
 
-- **Core 1 — render task (~120 FPS):** `EyeAnimator::update()` advances the movement, blink, and iris state machines each frame. When `needsRender()` is true, `EyeRenderer::renderFrame()` draws the eye into the current PSRAM render buffer column by column using precomputed polar and displacement lookup tables. Dirty region tracking limits each display transfer to only the pixels that changed.
-- **Core 0 — Arduino `loop()`:** Handles serial commands and prints a status line every 5 seconds.
+- **Core 1 — render task (~120 FPS):** `EyeAnimator::update()` advances the movement, blink, and iris state machines each frame. When `needsRender()` is true, `EyeRenderer::renderFrame()` draws the eye into the current PSRAM render buffer using precomputed polar and displacement lookup tables. Dirty region tracking limits each display transfer to only the pixels that changed.
+- **Core 0 — display transfer + `loop()`:** The `eyeXfer` FreeRTOS task (priority 5) waits for a semaphore signal, then calls `directTransfer()` to stream the completed frame buffer to the display over QSPI. This task runs concurrently with rendering on Core 1 — as soon as `renderFrame()` finishes drawing, it signals the transfer task and immediately begins rendering the next frame into the other buffer. Arduino `loop()` also runs on Core 0 and handles serial commands and the 5-second status line.
 
 ### Eye Rendering
 
-Each eye is defined by a precomputed set of lookup tables baked into a C++ header by `tablegen.py`:
+Each eye is defined by a precomputed set of lookup tables baked into C++ headers by `tablegen.py` and `geneye.py`:
 
 - **Polar angle / distance maps** — map every pixel in the display circle to a polar coordinate in texture space
 - **Spherical displacement map** — simulates the curvature of an eyeball
+- **Radius lookup table** — `uint8_t[mapRadius²]` precomputed in `begin()`; eliminates `sqrt()` in the hot pixel loop
 - **Eyelid tables** (optional) — per-column upper/lower eyelid Y positions for custom lid shapes
 
-At runtime, `EyeRenderer` uses these tables to look up the correct iris, sclera, or pupil color for each pixel in O(1) per pixel. The circular clipping bounds are precomputed once into per-scanline start/end X values, avoiding `sqrt()` per pixel.
+Textures are stored in **angle-major layout** (`T[angle * texH + radius]`) so that sequential radius lookups within a scanline are contiguous in memory. `EyeRenderer` builds a 256-entry angle→row pointer table at init time, replacing a per-pixel multiply with a single indexed load.
+
+Per-scanline, zone limits (`xPupilLim`, `xIrisLim`) are computed once via the radius map, so the inner pixel loop uses integer comparisons instead of per-pixel radius checks. All lookup tables (angle map, radius map, iris texture, sclera texture) are copied into DRAM at `begin()` time to avoid PSRAM latency in the hot loop.
+
+The frame buffer is stored big-endian (pre-swapped at write time), allowing the transfer task to stream it directly to the display via GDMA without a DRAM staging copy.
 
 ### Eye Movement
 
@@ -112,14 +117,14 @@ resources/eyes/
 
 ### Generating C++ Headers
 
-Run `tablegen.py` to generate C++ header files with precomputed polar maps and displacement maps. These tables are shared across all eyes for a given display size. Header files are placed in `include/display/`.
+Run `resources/tools/tablegen.py` to generate C++ header files with precomputed polar maps and displacement maps. These tables are shared across all eyes for a given display size. Header files are placed in `include/display/`.
 
 ```bash
 # Regenerate for a single display type
-python tablegen.py [display_type]
+python resources/tools/tablegen.py [display_type]
 
 # Regenerate all display types
-python tablegen.py -all
+python resources/tools/tablegen.py -all
 ```
 
 `display_type` is `default` (240x240), `amoled` (466x466), or `trgb` (480x480).
@@ -148,18 +153,23 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
         "angle": 0,
         "spin": 0,
         "iSpin": 0,
-        "mirror": false
+        "mirror": false,
+        "maxTexW": 256,
+        "maxTexH": 116
     },
     "sclera": {
         "color": 65535,
         "angle": 0,
         "spin": 0,
         "iSpin": 0,
-        "mirror": false
+        "mirror": false,
+        "maxTexW": 128,
+        "maxTexH": 64
     },
     "eyelid": {
         "color": 0,
         "normalClosure": 0.15,
+        "wideClosure": 1.0,
         "tracking": true
     }
 }
@@ -176,10 +186,15 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
 | `iris.filename`                     | Optional PNG/BMP texture (relative path, auto-converted to RGB565)                 |
 | `sclera.filename`                   | Optional sclera texture                                                            |
 | `eyelid.upperFilename`              | Optional custom lid images (upper, lower; must match display)                      |
+| `iris.maxTexW` / `maxTexH`          | Cap iris texture dimensions at generation time (pixels). Enforces DRAM budget.     |
+| `sclera.maxTexW` / `maxTexH`        | Cap sclera texture dimensions at generation time (pixels).                         |
 | `eyelid.normalClosure`              | Eyelid coverage fraction at rest (0.0–1.0). Default: `0.0`                         |
+| `eyelid.wideClosure`                | Eyelid retraction fraction for the `eyesWide()` expression (0.0–1.0). Default: `1.0` |
 | `eyelid.tracking`                   | Eyelids track pupil vertical position. Default: `true`                             |
 
-`eyelid.normalClosure` sets how much the lids close over the eye in the resting-open position. A value of `0.15` means the lids cover 15 % of the eye radius at rest. `eyesWide()` bypasses this offset and retracts the lids fully to 1.0, making the expression visually distinct from the normal resting gap. The supplied eye definitions use `0.15` (default\_eye), `0.20` (human\_eye), and `0.05` (eagle).
+`eyelid.normalClosure` sets how much the lids close over the eye in the resting-open position. A value of `0.15` means the lids cover 15 % of the eye radius at rest. `eyesWide()` retracts the lids to the `wideClosure` fraction, making the expression visually distinct from the normal resting gap. The supplied eye definitions use `0.15` (default\_eye), `0.20` (hazel), and `0.05` (eagle).
+
+`geneye.py` prints a DRAM budget warning at generation time if the combined angle map + radius map + iris texture + sclera texture exceeds ~170 KB (the threshold above which textures spill from DRAM into PSRAM and degrade render performance). Use `maxTexW`/`maxTexH` in the `.eye` config to bring an eye within budget.
 
 ### Adding a New Eye
 
@@ -188,9 +203,9 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
 2. Generate headers:
 
    ```bash
-   python geneye.py -eye <eye_name>    Generate header for specific eye
-   python geneye.py -all               Generate headers for all eyes
-   python geneye.py -list              List available eyes
+   python resources/tools/geneye.py -eye <eye_name>    # Generate header for specific eye
+   python resources/tools/geneye.py -all               # Generate headers for all eyes
+   python resources/tools/geneye.py -list              # List available eyes
    ```
 
 3. Register in `include/EyeLibrary.h` under both board sections:
@@ -209,9 +224,12 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
 Switch the active eye over serial without reflashing:
 
 ```text
-E0    → switch to eye index 0 (default_eye)
-E1    → switch to eye index 1 (eagle)
-E2    → switch to eye index 2 (human_eye)
+E0    → switch to eye index 0 (anime)
+E1    → switch to eye index 1 (default_eye)
+E2    → switch to eye index 2 (dragon)
+E3    → switch to eye index 3 (eagle)
+E4    → switch to eye index 4 (hazel)
+E5    → switch to eye index 5 (leopard)
 ```
 
 The command is parsed in `loop()` and calls `EyeAnimator::setEyeIndex()`, which reinitializes the renderer with the new eye definition.
@@ -424,12 +442,16 @@ include/
     *_466.h                 # Generated AMOLED eye headers
     *_480.h                 # Generated T-RGB eye headers
 
-resources/eyes/
-  tablegen.py               # Eye header generator
-  <eye_name>/
-    <eye_name>_466.eye      # AMOLED eye config
-    <eye_name>_480.eye      # T-RGB eye config
-    *.png / *.bmp           # Optional textures and eyelid images
+resources/
+  tools/
+    tablegen.py             # Display polar-map / displacement table generator
+    geneye.py               # Eye header generator (angle-major textures, DRAM budget check)
+    test_geneye_texture.py  # Texture layout unit tests
+  eyes/
+    <eye_name>/
+      <eye_name>_466.eye    # AMOLED eye config
+      <eye_name>_480.eye    # T-RGB eye config
+      *.png / *.bmp         # Optional textures and eyelid images
 ```
 
 ---
@@ -438,9 +460,11 @@ resources/eyes/
 
 Defined in `platformio.ini` under `[esp32base]`:
 
-| Flag                    | Purpose                             |
-| ----------------------- | ----------------------------------- |
-| `FDEBUG`                | Enable debug serial output          |
-| `DEBUG_OVERLAY_ENABLED` | Show FPS/battery HUD on display     |
-| `CORE_DEBUG_LEVEL=3`    | ESP-IDF log verbosity (info)        |
-| `BUILDVER=0.0.1`        | Embedded firmware version string    |
+| Flag                                  | Purpose                                                           |
+| ------------------------------------- | ----------------------------------------------------------------- |
+| `FDEBUG`                              | Enable debug serial output                                        |
+| `DEBUG_OVERLAY_ENABLED`               | Show FPS/battery HUD on display                                   |
+| `DEBUG_FPS_ENABLED`                   | Print FPS and render/transfer timing to serial                    |
+| `CORE_DEBUG_LEVEL=3`                  | ESP-IDF log verbosity (info)                                      |
+| `BUILDVER=0.0.1`                      | Embedded firmware version string                                  |
+| `ESP32QSPI_MAX_PIXELS_AT_ONCE=16384`  | SPI DMA chunk size (patched library); 16384 pixels = 32 KB buffer |
