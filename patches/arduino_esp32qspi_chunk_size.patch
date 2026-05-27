@@ -3,7 +3,7 @@
 @@ -8,7 +8,7 @@
  #ifndef ESP32QSPI_MAX_PIXELS_AT_ONCE
 -#define ESP32QSPI_MAX_PIXELS_AT_ONCE 1024
-+#define ESP32QSPI_MAX_PIXELS_AT_ONCE 8192
++#define ESP32QSPI_MAX_PIXELS_AT_ONCE 16384
  #endif
  #ifndef ESP32QSPI_FREQUENCY
  #define ESP32QSPI_FREQUENCY 40000000
@@ -30,3 +30,15 @@
 +    // when texture caches have consumed available DRAM.
 +    memcpy(_buffer, data, l);
 +    _spi_tran_ext.base.tx_buffer = _buffer;
+
+--- a/GFX Library for Arduino/src/databus/Arduino_ESP32QSPI.cpp
++++ b/GFX Library for Arduino/src/databus/Arduino_ESP32QSPI.cpp
+@@ -102,7 +102,7 @@
+   _buffer = (uint8_t *)heap_caps_aligned_alloc(16, ESP32QSPI_MAX_PIXELS_AT_ONCE * 2, MALLOC_CAP_DMA);
+   if (!_buffer)
+   {
+     return false;
+   }
+-  _2nd_buffer = (uint8_t *)heap_caps_aligned_alloc(16, ESP32QSPI_MAX_PIXELS_AT_ONCE * 2, MALLOC_CAP_DMA);
++  _2nd_buffer = (uint8_t *)heap_caps_aligned_alloc(16, 64, MALLOC_CAP_DMA);
+   if (!_2nd_buffer)
