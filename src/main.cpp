@@ -38,7 +38,7 @@
 // #define PCF85063_DIAGNOSTIC_ENABLED // Comment out to suppress PCF85063 diagnostic status output on serial
 // #define SY6970_DIAGNOSTIC_ENABLED   // Comment out to suppress SY6970 diagnostic status output on serial
 
-#ifdef DEBUG_FPS_ENABLED
+#if defined(DEBUG_FPS_ENABLED)
 static uint32_t s_frameCount = 0;
 static uint32_t s_fpsTimer = 0;
 static uint32_t s_currentFps = 0;
@@ -53,7 +53,7 @@ static GestureFaceInput *s_gestureFace = nullptr;
 static EyeSyncManager *s_syncManager = nullptr;
 static LightSensor *s_lightSensor = nullptr;
 
-#ifdef DEBUG_OVERLAY_ENABLED
+#if defined(DEBUG_OVERLAY_ENABLED)
 static DebugOverlay s_debugOverlay;
 #endif
 
@@ -495,7 +495,7 @@ void setup()
     s_animator->setSyncManager(s_syncManager);
   }
 
-#ifdef DEBUG_OVERLAY_ENABLED
+#if defined(DEBUG_OVERLAY_ENABLED)
   s_debugOverlay.begin(s_display);
   s_debugOverlay.setEnabled(true);
   s_debugOverlay.setBatteryPin(4, 0, 4095);
@@ -522,7 +522,7 @@ void renderLoopTask(void *param)
   uint32_t lastFrame = 0;
   const uint32_t frameInterval = 8333; // ~120 FPS for smoother animation
 
-#ifdef DEBUG_FPS_ENABLED
+#if defined(DEBUG_FPS_ENABLED)
   s_frameCount = 0;
   s_fpsTimer = millis();
   s_currentFps = 0;
@@ -536,7 +536,7 @@ void renderLoopTask(void *param)
     {
       lastFrame = now;
 
-#ifdef DEBUG_FPS_ENABLED
+#if defined(DEBUG_FPS_ENABLED)
       s_frameCount++;
       if (millis() - s_fpsTimer >= 1000)
       {
@@ -547,7 +547,7 @@ void renderLoopTask(void *param)
       }
 #endif
 
-#ifdef DEBUG_OVERLAY_ENABLED
+#if defined(DEBUG_OVERLAY_ENABLED)
       s_debugOverlay.update();
 #endif
 

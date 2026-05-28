@@ -8,7 +8,7 @@
  *
  * AMOLED boards use 466x466, T-RGB uses 480x480, unknown boards default to 240x240.
  */
-#ifdef ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED
+#if defined(ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED)
 #define SCREEN_WIDTH 466
 #define SCREEN_HEIGHT 466
 #elif defined(ARDUINO_LILYGO_T_RGB)
@@ -77,12 +77,12 @@ struct ScleraConfig
  */
 struct EyelidConfig
 {
-  const uint8_t *upper;    // upper eyelid lookup table (pairs of startY, endY per column)
-  const uint8_t *lower;    // lower eyelid lookup table
+  const uint8_t *upper; // upper eyelid lookup table (pairs of startY, endY per column)
+  const uint8_t *lower; // lower eyelid lookup table
   uint16_t color;
-  float normalClosure;     // eyelid coverage at rest (0.0=fully open, 1.0=fully closed)
-  float wideClosure;       // eyelid coverage when wide/surprised (0.0=fully retracted, 1.0=fully closed)
-  bool tracking;           // eyelids track pupil vertical position
+  float normalClosure; // eyelid coverage at rest (0.0=fully open, 1.0=fully closed)
+  float wideClosure;   // eyelid coverage when wide/surprised (0.0=fully retracted, 1.0=fully closed)
+  bool tracking;       // eyelids track pupil vertical position
 };
 
 /**

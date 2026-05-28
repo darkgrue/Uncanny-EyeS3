@@ -490,7 +490,7 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   int upperRow = m_eyelidRenderer.getUpperRow(m_displaySize);
   int lowerRow = m_eyelidRenderer.getLowerRow(m_displaySize);
 
-#ifdef DEBUG_TIMING_ENABLED
+#if defined(DEBUG_TIMING_ENABLED)
   static uint32_t s_t0 = 0;
   s_t0 = micros();
 #endif
@@ -713,7 +713,7 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
 
   m_eyelidRenderer.drawEyelids(m_renderBuf);
 
-#ifdef DEBUG_TIMING_ENABLED
+#if defined(DEBUG_TIMING_ENABLED)
   uint32_t t1 = micros();
 #endif
 
@@ -734,7 +734,7 @@ void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
   // The task calls directTransfer, measures duration into m_xferUs, then signals m_xferDone.
   xSemaphoreGive(m_xferReady);
 
-#ifdef DEBUG_TIMING_ENABLED
+#if defined(DEBUG_TIMING_ENABLED)
   static uint32_t s_lastTimingPrint = 0;
   static uint32_t s_renderUs = 0;
   s_renderUs = t1 - s_t0;

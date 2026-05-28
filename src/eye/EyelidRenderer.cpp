@@ -199,7 +199,7 @@ void EyelidRenderer::renderCustomEyelids(float eyelidGap, int centerX, int cente
   float scale = (float)size / 255.0f;
   float gapClosed = 1.0f - eyelidGap;
 
-#ifdef FDEBUG
+#if defined(FDEBUG)
   static uint32_t s_lastDbg = 0;
   bool doDbg = (millis() - s_lastDbg) >= 2000;
   if (doDbg)
@@ -252,7 +252,7 @@ void EyelidRenderer::renderCustomEyelids(float eyelidGap, int centerX, int cente
           uint16_t colorBE = __builtin_bswap16(color);
           for (int y = yTop; y < yBot; y++)
             buffer[y * size + x] = colorBE;
-#ifdef FDEBUG
+#if defined(FDEBUG)
           if (doDbg && x == centerX)
             Serial.printf("[Eyelid] center col: gapClosed=%.2f circleTop=%d upperInnerY=%d upperEdge=%d (paints %d-%d)\n",
                           gapClosed, circleTop, upperInnerY, upperEdge, yTop, yBot);
@@ -276,7 +276,7 @@ void EyelidRenderer::renderCustomEyelids(float eyelidGap, int centerX, int cente
           uint16_t colorBE = __builtin_bswap16(color);
           for (int y = yTop; y < yBot; y++)
             buffer[y * size + x] = colorBE;
-#ifdef FDEBUG
+#if defined(FDEBUG)
           if (doDbg && x == centerX)
             Serial.printf("[Eyelid] center col: lowerInnerY=%d lowerEdge=%d circleBottom=%d (paints %d-%d)\n",
                           lowerInnerY, lowerEdge, circleBottom, yTop, yBot);

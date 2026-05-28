@@ -92,7 +92,7 @@ pio run --target uploadfs      # Upload filesystem image (if used)
 ## Serial / Debug
 
 - Use `Serial.begin(115200)` as the default baud rate unless the project specifies otherwise
-- Wrap all debug output in `#ifdef DEBUG_ENABLED` guards so it can be stripped for release builds
+- Wrap all debug output in `#if defined(DEBUG_ENABLED)` guards so it can be stripped for release builds
 - Do not leave blocking `while(!Serial)` calls in production code
 
 ### Serial Port Access Rules
@@ -156,7 +156,7 @@ When you need the user to close serial monitors:
 ## What Works Well
 
 - Breaking modules into `src/` subdirectories by functional domain
-- Using `#ifdef` guards for platform-specific code
+- Using `#if defined` guards for platform-specific code
 - Serial output at 115200 baud for debugging
 - Adding `-DDEBUG_ENABLED` to `build_flags` in `platformio.ini` to enable debug output
 
