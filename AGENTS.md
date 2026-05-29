@@ -145,7 +145,7 @@ When you need the user to close serial monitors:
 
 ## Common Mistakes to Avoid
 
-- **Don't** run `pio` directly — use `%USERPROFILE%\.platformio\penv\Scripts\platformio.exe` on Windows
+- **Don't** run `pio` directly — use `$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe` on Windows PowerShell
 - **Don't** edit `.pio/` contents — will be overwritten on next build
 - **Don't** add `.ino` files — PlatformIO uses `.cpp`, not Arduino-style sketches
 - **Don't** use Unix paths (e.g., `/dev/ttyUSB0`) — Windows uses `COMx` or auto-detect
@@ -165,16 +165,16 @@ When you need the user to close serial monitors:
 ## Common Question Quick Answers
 
 **Q: How do I add a new library?**  
-A: Add it to `lib_deps` in `platformio.ini`, then run `pio run` to fetch and build.
+A: Add it to `lib_deps` in `platformio.ini`, then run `$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe run` to fetch and build.
 
 **Q: Where are build artifacts?**  
 A: `.pio/build/<env_name>/`
 
 **Q: How to enable debug output?**  
-A: Add `build_flags = -DDEBUG_ENABLED` to the `[env:...]` section in `platformio.ini`.
+A: Add `build_flags = -DDEBUG_ENABLED` to the `[esp32base]` section in `platformio.ini`.
 
 **Q: How do I clean a build?**  
-A: Run `pio run --target clean`
+A: Run `$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe run --target clean`.
 
 **Q: What's the upload procedure?**  
-A: Connect device, then run `pio run --target upload` from the project root.
+A: Connect device, then run `$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe run --target upload` from the project root.
