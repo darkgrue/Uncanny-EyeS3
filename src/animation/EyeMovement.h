@@ -245,6 +245,7 @@
 
 #define BOOP_DURATION_MS 1500   // How long the boop expression holds (ms)
 #define BOOP_SQUINT_FACTOR 0.6f // Eyelid closure during boop (0.0=open, 1.0=closed)
+#define BOOP_PUPIL_DURATION 120 // Transition duration for pupil dilate/constrict during boop (ms)
 
 // ============================================================================
 // End of parameters

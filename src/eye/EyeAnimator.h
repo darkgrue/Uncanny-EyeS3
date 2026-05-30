@@ -134,7 +134,12 @@ public:
   void eyesBoop()
   {
     if (!m_booped)        // don't restart if already mid-boop
+    {
       m_boopStart = millis();
+      m_pupilBooping = true;
+      m_pupilBoopFrom = m_currentIris;
+      m_pupilBoopStart = millis();
+    }
     m_booped = true;
   }
 
@@ -236,6 +241,10 @@ private:
   uint32_t m_pupilReleaseStart = 0;       // millis() when release animation started
   bool     m_booped = false;              // True when boop expression is active
   uint32_t m_boopStart = 0;           // millis() when current boop began
+bool     m_pupilBooping = false;       // True while animating pupil during boop entry/exit
+  float    m_pupilBoopFrom = 0.0f;       // Pupil value when boop pupil animation started
+  uint32_t m_pupilBoopStart = 0;         // millis() when boop pupil animation started
+  float    m_pupilPreBoop = 0.5f;        // Pupil value to restore when boop exits
   bool     m_needsRender = true;      // Flag to request a new frame render
   bool     m_initialized = false;     // True after successful begin()
 

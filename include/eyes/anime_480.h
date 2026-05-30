@@ -3819,7 +3819,7 @@ namespace anime {
 
   const EyeDefinition eye PROGMEM = {
       "anime_eye", 0.5, 0, 0, nullptr,
-      { 0, 0.0, 0.35, 0.75 },
+      { 0, 0.0, 0.35, 0.725 },
       { 0.5, 0.3, { iris_texture, 256, 115 }, 65224, 0, 0, 0, 0 },
       { { nullptr, 0, 0 }, 65535, 0, 0, 0, 0 },
       { upper, lower, 0, 0.3, 0.0, true },

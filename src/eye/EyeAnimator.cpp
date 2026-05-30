@@ -312,15 +312,47 @@ void EyeAnimator::update(uint32_t now)
 
   if (m_booped)
   {
-    if (millis() - m_boopStart < BOOP_DURATION_MS)
+    uint32_t boopElapsed = millis() - m_boopStart;
+
+    if (boopElapsed < BOOP_DURATION_MS)
     {
       m_blink.wideTo(BOOP_SQUINT_FACTOR); // heavy squint — overrides whatever normal() set
-      m_currentIris = m_irisMin;          // fully dilated pupils
+
+      // Smooth pupil dilation on boop entry
+      if (m_pupilBooping)
+      {
+        float t = constrain((float)(millis() - m_pupilBoopStart) / (float)BOOP_PUPIL_DURATION, 0.0f, 1.0f);
+        float eased = t * t * (3.0f - 2.0f * t);
+        m_pupilPreBoop = m_pupilBoopFrom; // save pre-boop pupil for restore
+        m_currentIris = m_pupilBoopFrom + (m_irisMin - m_pupilBoopFrom) * eased;
+        if (t >= 1.0f)
+          m_pupilBooping = false;
+      }
+      else
+      {
+        m_currentIris = m_irisMin; // fully dilated pupils (hold)
+      }
     }
     else
     {
+      // Smooth pupil constriction on boop exit
+      m_pupilBooping = true;
+      m_pupilBoopFrom = m_currentIris;
+      m_pupilBoopStart = millis();
       m_booped = false;
-      eyesNormal();
+      eyesNormal(); // restore eyelids, resume movement; pupil animates separately
+    }
+  }
+  else if (m_pupilBooping)
+  {
+    // Animate pupil back to pre-boop value
+    float t = constrain((float)(millis() - m_pupilBoopStart) / (float)BOOP_PUPIL_DURATION, 0.0f, 1.0f);
+    float eased = t * t * (3.0f - 2.0f * t);
+    m_currentIris = m_pupilBoopFrom + (m_pupilPreBoop - m_pupilBoopFrom) * eased;
+    if (t >= 1.0f)
+    {
+      m_pupilBooping = false;
+      m_currentIris = m_pupilPreBoop;
     }
   }
 
