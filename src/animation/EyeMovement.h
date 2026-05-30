@@ -229,7 +229,7 @@
 
 // Pupil smoothAlpha for light-sensor-driven transitions (exponential smoothing coefficient)
 // Lower = slower/more gradual, Higher = faster/more snappy (0.01 to 0.2 typical)
-#define PUPIL_SMOOTH_ALPHA 0.1f
+#define PUPIL_SMOOTH_ALPHA 0.5f
 
 // Hold time at each drift target (ms)
 #define IRIS_HOLD_MIN 5000

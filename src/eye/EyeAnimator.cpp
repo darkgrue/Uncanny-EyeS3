@@ -15,7 +15,8 @@
 EyeAnimator::EyeAnimator()
     : m_display(nullptr), m_input(nullptr), m_sync(nullptr), m_eyeDef(nullptr),
       m_lightSensorPin(-1), m_lastLightRead(0), m_booped(false),
-      m_needsRender(true), m_initialized(false)
+      m_needsRender(true), m_initialized(false),
+      m_irisCenter(0.5f), m_irisCenterPrev(0.5f), m_lightSmoothAlpha(0.2f)
 {
 }
 
@@ -409,7 +410,7 @@ bool EyeAnimator::broadcastState()
  */
 void EyeAnimator::updateLightSensor(uint32_t now)
 {
-  constexpr uint32_t LIGHT_INTERVAL = 100; // 10 Hz max polling (100ms)
+  constexpr uint32_t LIGHT_INTERVAL = 50; // 20 Hz max polling (50ms)
 
   if (now - m_lastLightRead < LIGHT_INTERVAL)
     return;
@@ -422,8 +423,21 @@ void EyeAnimator::updateLightSensor(uint32_t now)
   float normalized = (float)(raw - m_lightMin) / (float)(m_lightMax - m_lightMin);
   normalized = pow(normalized, m_lightCurve);
 
-  m_irisCenter = normalized; // hippus oscillates around this normalized position
+  float targetIrisCenter = 1.0f - normalized; // 1.0 = most dilated (bright light), 0.0 = most constricted (dark)
+
+  // EMA smoothing on iris center to prevent oscillation
+  m_irisCenter = m_irisCenter + m_lightSmoothAlpha * (targetIrisCenter - m_irisCenter);
+
   m_lastLightRead = now;
+  /*
+  static uint32_t lastDebug = 0;
+  if (now - lastDebug > 500)
+  {
+    Serial.printf("[LightSensor] raw=%u norm=%.3f target=%.3f center=%.3f smoothAlpha=%.2f\n",
+                  raw, normalized, targetIrisCenter, m_irisCenter, m_lightSmoothAlpha);
+    lastDebug = now;
+  }
+  */
 }
 
 /**

@@ -134,7 +134,12 @@ bool LightSensor::update()
     return false;
   }
 
-  m_rawValue = analogRead(m_pin);
+  m_rawValue = 0;
+  for (int i = 0; i < OVERSAMPLE_COUNT; i++)
+  {
+    m_rawValue += analogRead(m_pin);
+  }
+  m_rawValue /= OVERSAMPLE_COUNT;
 
   uint16_t range = m_maxValue - m_minValue;
   if (range > 0)
@@ -151,7 +156,8 @@ bool LightSensor::update()
     m_normalizedValue = powf(m_normalizedValue, m_curve);
   }
 
-  float targetPupilFactor = 1.0f - m_normalizedValue;
+  float targetPupilFactor = 1.0f - m_normalizedValue; // 1.0 = most dilated (bright light), 0.0 = most constricted (dark)
+
   uint32_t now = millis();
   uint32_t dt = now - m_lastUpdate;
   m_lastUpdate = now;

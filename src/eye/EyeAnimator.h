@@ -206,7 +206,9 @@ private:
   float m_irisMin = 0.35f;      // Minimum (most constricted) pupil fraction from eye definition
   float m_irisRange = 1.32f;    // Iris range (maxFraction - minFraction)
   float m_irisCenter = 0.5f;    // Normalized center [0,1] for hippus oscillation; 0.5=midpoint, sensor-derived when sensor present
+  float m_irisCenterPrev = 0.5f; // Previous smoothed iris center for EMA
   uint32_t m_lastLightRead = 0; // Timestamp of last sensor read
+  float m_lightSmoothAlpha = 0.2f; // EMA smoothing for light sensor (lower = smoother)
   float m_currentIris = 0.5f;   // Current pupil factor
 
   // Autonomous iris animation (used when no light sensor)

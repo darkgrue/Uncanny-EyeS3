@@ -93,6 +93,9 @@ public:
   /** @brief Noise floor threshold used in detection algorithm. */
   static constexpr int NOISE_FLOOR = 10;
 
+  /** @brief Number of ADC samples to average per update for noise reduction. */
+  static constexpr int OVERSAMPLE_COUNT = 4;
+
 private:
   /** @brief Sample ambient light over ~250ms to establish min/max calibration range. */
   void estimateRange();
