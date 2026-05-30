@@ -16,6 +16,7 @@
 #include "animation/EyeMovement.h"
 #include "common/DisplayHAL.h"
 #include "input/InputBase.h"
+#include "input/LuxSensor.h"
 #include "network/EyeSync.h"
 #include "eyes.h"
 #include <atomic>
@@ -62,6 +63,12 @@ public:
    * @param curve Power curve exponent (1.0 = linear).
    */
   void setLightSensor(int pin, uint16_t minVal, uint16_t maxVal, float curve = 1.0f);
+
+  /**
+   * @brief Configure the MAX44009 lux sensor for pupil control.
+   * @param sensor Pointer to the LuxSensor instance, or nullptr to disable.
+   */
+  void setLuxSensor(LuxSensor *sensor);
 
   /**
    * @brief Set the pupil size range (fraction of iris radius).
@@ -189,7 +196,8 @@ private:
   int m_lightSensorPin = -1;    // ADC pin for light sensor, -1 if disabled
   uint16_t m_lightMin = 0;      // Calibrated bright ADC value
   uint16_t m_lightMax = 1023;   // Calibrated dark ADC value
-  float m_lightCurve = 1.0f;    // Power curve exponent
+  float m_lightCurve = 1.0f;   // Power curve exponent
+  LuxSensor *m_luxSensor = nullptr; // I2C lux sensor (nullptr if not used)
   float m_irisMin = 0.35f;      // Minimum (most constricted) pupil fraction from eye definition
   float m_irisRange = 1.32f;    // Iris range (maxFraction - minFraction)
   float m_irisCenter = 0.5f;    // Normalized center [0,1] for hippus oscillation; 0.5=midpoint, sensor-derived when sensor present

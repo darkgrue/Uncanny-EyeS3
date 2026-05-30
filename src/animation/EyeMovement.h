@@ -152,95 +152,99 @@
 // ============================================================================
 
 // Lognormal amplitude distribution
-#define EYE_MOVE_LOGNORMAL_SIGMA       0.35f
-#define EYE_MOVE_LOGNORMAL_OFFSET     -0.2f
-#define EYE_MOVE_AMPLITUDE_SCALE       0.5f
-#define EYE_MOVE_MIN_AMPLITUDE         0.01f
-#define EYE_MOVE_MAX_AMPLITUDE_SCALE   0.8f
+#define EYE_MOVE_LOGNORMAL_SIGMA 0.35f
+#define EYE_MOVE_LOGNORMAL_OFFSET -0.2f
+#define EYE_MOVE_AMPLITUDE_SCALE 0.5f
+#define EYE_MOVE_MIN_AMPLITUDE 0.01f
+#define EYE_MOVE_MAX_AMPLITUDE_SCALE 0.8f
 
 // Movement boundary (fraction of display half-width)
-#define EYE_MOVE_BOUNDS_RADIUS         0.6f
+#define EYE_MOVE_BOUNDS_RADIUS 0.6f
 
 // Centering bias
-#define EYE_MOVE_CENTER_BIAS_FACTOR    0.6f
-#define EYE_MOVE_CENTER_BIAS_MAX       0.5f
+#define EYE_MOVE_CENTER_BIAS_FACTOR 0.6f
+#define EYE_MOVE_CENTER_BIAS_MAX 0.5f
 
 // Per-saccade duration (ms)
-#define EYE_MOVE_BASE_DURATION_MIN     200
-#define EYE_MOVE_BASE_DURATION_MAX     350
+#define EYE_MOVE_BASE_DURATION_MIN 200
+#define EYE_MOVE_BASE_DURATION_MAX 350
 #define EYE_MOVE_DURATION_DISTANCE_SCALE 150
-#define EYE_MOVE_DURATION_MIN          150
-#define EYE_MOVE_DURATION_MAX          500
+#define EYE_MOVE_DURATION_MIN 150
+#define EYE_MOVE_DURATION_MAX 500
 
 // Fixation pause between saccades (ms)
-#define EYE_MOVE_FIXATION_PAUSE_MIN    3000
-#define EYE_MOVE_FIXATION_PAUSE_MAX    12000
+#define EYE_MOVE_FIXATION_PAUSE_MIN 3000
+#define EYE_MOVE_FIXATION_PAUSE_MAX 12000
 
 // Delay before resuming saccades after losing an external target (ms)
-#define EYE_MOVE_SACCADE_DELAY         4000
+#define EYE_MOVE_SACCADE_DELAY 4000
 
 // Sigmoid easing steepness for saccade velocity profile (range 1.0-5.0)
-#define EYE_MOVE_EASING_STEEPNESS      3.0f
+#define EYE_MOVE_EASING_STEEPNESS 3.0f
 
 // Joystick smooth-follow (adaptive exponential smoothing per frame at ~120 FPS)
-#define JOYSTICK_BASE_ALPHA            0.12f
-#define JOYSTICK_DIST_ALPHA            0.30f
+#define JOYSTICK_BASE_ALPHA 0.12f
+#define JOYSTICK_DIST_ALPHA 0.30f
 
 // ============================================================================
 // EYELID / BLINK PARAMETERS
 // ============================================================================
 
 // Blink phase durations (ms)
-#define BLINK_DURATION_CLOSE_MIN       60
-#define BLINK_DURATION_CLOSE_MAX       100
-#define BLINK_DURATION_OPEN_MIN        120
-#define BLINK_DURATION_OPEN_MAX        200
-#define BLINK_PAUSE_AT_CLOSURE         20
+#define BLINK_DURATION_CLOSE_MIN 60
+#define BLINK_DURATION_CLOSE_MAX 100
+#define BLINK_DURATION_OPEN_MIN 120
+#define BLINK_DURATION_OPEN_MAX 200
+#define BLINK_PAUSE_AT_CLOSURE 20
 
 // Automatic blink interval (ms) and burst / post-saccade probabilities
-#define BLINK_INTERVAL_MIN             2000
-#define BLINK_INTERVAL_MAX             8000
-#define BLINK_PROBABILITY_BURST        0.15f
-#define BLINK_CHANCE_AFTER_SACCADE     0.08f
+#define BLINK_INTERVAL_MIN 2000
+#define BLINK_INTERVAL_MAX 8000
+#define BLINK_PROBABILITY_BURST 0.15f
+#define BLINK_CHANCE_AFTER_SACCADE 0.08f
 
 // Eyelid tracking and shape
-#define EYELID_UPPER_TRACK_STRENGTH    0.3f
-#define EYELID_LOWER_TRACK_STRENGTH    0.15f
-#define EYELID_SQUINT_FACTOR           0.7f
-#define EYELID_NORMAL_CLOSURE_DEFAULT  0.15f  // Resting coverage (0.0=open, 1.0=closed)
-#define EYELID_WIDE_CLOSURE_DEFAULT    0.0f   // Wide/surprised coverage
-#define EYELID_SMOOTHING               0.1f
-#define BLINK_USE_SMOOTHSTEP           1
+#define EYELID_UPPER_TRACK_STRENGTH 0.3f
+#define EYELID_LOWER_TRACK_STRENGTH 0.15f
+#define EYELID_SQUINT_FACTOR 0.7f
+#define EYELID_NORMAL_CLOSURE_DEFAULT 0.15f // Resting coverage (0.0=open, 1.0=closed)
+#define EYELID_WIDE_CLOSURE_DEFAULT 0.0f    // Wide/surprised coverage
+#define EYELID_SMOOTHING 0.1f
+#define BLINK_USE_SMOOTHSTEP 1
 
 // Forced expression animation durations (ms)
-#define EYELID_CLOSE_DURATION          150    // Z-button hold → fully closed
-#define EYELID_WIDE_DURATION           130    // C-button hold → wide open
-#define EYELID_NORMAL_DURATION         230    // Button release → resting gap
-#define PUPIL_WIDE_DURATION            100    // C-button hold → constricted pupil
-#define PUPIL_RELEASE_DURATION         150    // C-button release → normal pupil
+#define EYELID_CLOSE_DURATION 150  // Z-button hold → fully closed
+#define EYELID_WIDE_DURATION 130   // C-button hold → wide open
+#define EYELID_NORMAL_DURATION 230 // Button release → resting gap
+#define PUPIL_WIDE_DURATION 100    // C-button hold → constricted pupil
+#define PUPIL_RELEASE_DURATION 150 // C-button release → normal pupil
 
 // ============================================================================
 // PUPIL / IRIS AUTONOMOUS ANIMATION (HIPPUS) PARAMETERS
 // ============================================================================
 
 // Drift amplitude: normal-distribution sigma and hard clip (normalized 0-1)
-#define IRIS_AMPLITUDE_SCALE           0.07f
-#define IRIS_AMPLITUDE_MAX             0.15f
+#define IRIS_AMPLITUDE_SCALE 0.07f
+#define IRIS_AMPLITUDE_MAX 0.15f
+
+// Pupil smoothAlpha for light-sensor-driven transitions (exponential smoothing coefficient)
+// Lower = slower/more gradual, Higher = faster/more snappy (0.01 to 0.2 typical)
+#define PUPIL_SMOOTH_ALPHA 0.1f
 
 // Hold time at each drift target (ms)
-#define IRIS_HOLD_MIN                  5000
-#define IRIS_HOLD_MAX                  13000
+#define IRIS_HOLD_MIN 5000
+#define IRIS_HOLD_MAX 13000
 
 // Transition duration for each drift (ms)
-#define IRIS_TRANSITION_MIN            1500
-#define IRIS_TRANSITION_MAX            3500
+#define IRIS_TRANSITION_MIN 1500
+#define IRIS_TRANSITION_MAX 3500
 
 // ============================================================================
 // BOOP EXPRESSION PARAMETERS
 // ============================================================================
 
-#define BOOP_DURATION_MS               1500   // How long the boop expression holds (ms)
-#define BOOP_SQUINT_FACTOR             0.6f   // Eyelid closure during boop (0.0=open, 1.0=closed)
+#define BOOP_DURATION_MS 1500   // How long the boop expression holds (ms)
+#define BOOP_SQUINT_FACTOR 0.6f // Eyelid closure during boop (0.0=open, 1.0=closed)
 
 // ============================================================================
 // End of parameters
@@ -331,27 +335,27 @@ public:
 private:
   void updatePosition();
 
-  float m_currentX = 0.0f;                  // Current X position (0.0 = center)
-  float m_currentY = 0.0f;                  // Current Y position
-  float m_startX   = 0.0f;                  // Start position for current movement
-  float m_startY   = 0.0f;
-  float m_targetX  = 0.0f;                  // Target position
-  float m_targetY  = 0.0f;
+  float m_currentX = 0.0f; // Current X position (0.0 = center)
+  float m_currentY = 0.0f; // Current Y position
+  float m_startX = 0.0f;   // Start position for current movement
+  float m_startY = 0.0f;
+  float m_targetX = 0.0f; // Target position
+  float m_targetY = 0.0f;
   float m_boundsRadius = EYE_MOVE_BOUNDS_RADIUS; // Movement boundary radius
 
-  bool m_moving     = false;                // True during active movement
-  bool m_randomMode = true;                 // True when generating autonomous saccades
+  bool m_moving = false;    // True during active movement
+  bool m_randomMode = true; // True when generating autonomous saccades
 
-  uint32_t m_moveStartTime = 0;             // Timestamp when current movement started
-  uint32_t m_moveDuration  = 0;             // Total planned duration of current movement
+  uint32_t m_moveStartTime = 0; // Timestamp when current movement started
+  uint32_t m_moveDuration = 0;  // Total planned duration of current movement
 
   uint32_t m_minDuration = EYE_MOVE_BASE_DURATION_MIN;
   uint32_t m_maxDuration = EYE_MOVE_BASE_DURATION_MAX;
 
   uint32_t m_saccadeDelayAfterTrack = EYE_MOVE_SACCADE_DELAY;
-  uint32_t m_postMoveIdleMs = 0;            // One-shot override for the next fixation pause
-  uint32_t m_lastTrackTime = 0;             // Timestamp of last target status change
-  bool     m_idle = false;                  // True when idle between saccades
+  uint32_t m_postMoveIdleMs = 0; // One-shot override for the next fixation pause
+  uint32_t m_lastTrackTime = 0;  // Timestamp of last target status change
+  bool m_idle = false;           // True when idle between saccades
 };
 
 #endif // EYE_MOVEMENT_H

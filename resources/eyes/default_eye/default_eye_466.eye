@@ -10,7 +10,7 @@
         "maxFraction": 0.8
     },
     "iris": {
-        "radiusFraction": 0.5,
+        "maxFraction": 0.5,
         "color": 31,
         "angle": 0,
         "spin": 0,

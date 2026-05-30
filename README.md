@@ -15,6 +15,7 @@ A port of the [Adafruit M4 Eyes](https://github.com/adafruit/Adafruit_Learning_S
 
 - Nintendo Wii Nunchuk (WiiChuck) — I2C puppeteering controller
 - LDR photoresistor — ambient light-driven pupil dilation
+- MAX44009 I2C ambient light sensor — alternative light sensor for pupil control
 - DFRobot Gravity Gesture & Face Detection Sensor — AI face tracking for eye targeting
 - MicroSD card — boot-time configuration via `/eyes_config.json` (ESP-NOW channel, security key, MAC allowlist)
 - SY6970 — battery fuel gauge / charger (on-board, auto-initialized)
@@ -27,7 +28,7 @@ A port of the [Adafruit M4 Eyes](https://github.com/adafruit/Adafruit_Learning_S
 - **Realistic blinking** — three-phase FSM (close → pause → open) with randomized timing and burst probability
 - **WiiChuck puppeteering** — joystick-driven eye targeting with edge-triggered blink/boop and hold commands for close/wide expressions
 - **Face tracking** — AI gesture & face sensor directs gaze to the nearest detected face, overriding autonomous movement while yielding to WiiChuck joystick
-- **Light sensor pupil control** — photoresistor drives pupil dilation; falls back to autonomous iris animation when not connected
+- **Light sensor pupil control** — LDR photoresistor or MAX44009 I2C sensor drives pupil dilation; falls back to autonomous iris animation when not connected
 - **Multi-eye ESP-NOW sync** — one device acts as controller, others follow with interpolated state at up to ~120 FPS; optional shared-key authentication prevents unauthorized devices from joining
 - **SD card configuration** — optional `/eyes_config.json` at boot sets ESP-NOW channel, shared key, and MAC allowlist; firmware runs with safe defaults when no card is present
 - **Runtime eye switching** — switch between registered eye designs over serial without reflashing
@@ -148,7 +149,8 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
         "maxFraction": 1.67
     },
     "iris": {
-        "radiusFraction": 0.5,
+        "maxFraction": 0.5,
+        "minFraction": 0.3,
         "color": 65281,
         "angle": 0,
         "spin": 0,
@@ -181,7 +183,8 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
 | `backColor`                         | Background color behind the eye (RGB565)                                           |
 | `pupil.slitRadius`                  | `0.0` = round; fraction of iris radius for slit vertical half-height (e.g. `0.75`) |
 | `pupil.minFraction` / `maxFraction` | Pupil size range as fraction of iris radius                                        |
-| `iris.radiusFraction`               | Iris radius as fraction of eye radius                                              |
+| `iris.maxFraction`                  | Iris radius as fraction of eye radius                                              |
+| `iris.minFraction`                  | Minimum pupil size as fraction of iris radius (light sensor minimum constriction) |
 | `iris.spin` / `iSpin`               | Continuous spin / fixed per-frame spin override                                    |
 | `iris.filename`                     | Optional PNG/BMP texture (relative path, auto-converted to RGB565)                 |
 | `sclera.filename`                   | Optional sclera texture                                                            |
@@ -269,13 +272,19 @@ The WiiChuck is optional — the firmware prints a warning at startup if not fou
 
 ## Light Sensor (Pupil Control)
 
-Connect an LDR voltage divider to GPIO 5 (`LIGHT_PIN`). The sensor is auto-detected at startup by sampling for minimum variance; if not found, autonomous iris animation is used instead.
+Two sensor types are supported:
 
-When connected:
+- **LDR photoresistor** — connect a voltage divider to GPIO 5 (`LIGHT_PIN`). Auto-detected at startup by sampling for minimum variance.
+- **MAX44009 I2C ambient light sensor** — connected via the I2C bus (same as WiiChuck). Auto-detected on startup.
+
+When a light sensor is connected:
 
 - Bright light → constricted pupil
 - Dim light → dilated pupil
-- Polled at 10 Hz with configurable min/max calibration and power curve
+- Hippus oscillation (natural pupillary unrest) still applies on top of the sensor-driven baseline
+- Transition speed is controlled by `PUPIL_SMOOTH_ALPHA` in `src/animation/EyeMovement.h` (lower = slower)
+
+If no sensor is found, autonomous iris animation is used instead.
 
 ---
 
@@ -382,7 +391,7 @@ The first active source in the following order controls eye position each frame:
 
 Pupil size is driven by whichever source is available:
 
-1. **Light sensor (LDR)** — maps ambient light to pupil dilation at 10 Hz when connected.
+1. **Light sensor (LDR or MAX44009)** — maps ambient light to pupil dilation at up to 100 Hz with time-based exponential smoothing when connected.
 2. **Autonomous iris animation** — simulates natural pupillary unrest using lognormal targets and smoothstep easing when no light sensor is present.
 
 Face detection and ESP-NOW do not affect pupil size.

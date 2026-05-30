@@ -11,6 +11,7 @@
 #define LIGHT_SENSOR_H
 
 #include "common/EyeState.h"
+#include "animation/EyeMovement.h"
 
 #define LIGHT_LOWER_ADC_THRESHOLD 300
 
@@ -107,6 +108,9 @@ private:
   float m_curve = 1.0f;       /**< Power curve exponent. */
 
   float m_pupilFactor = 0.5f; /**< Current pupil constriction factor. */
+  float m_smoothAlpha = PUPIL_SMOOTH_ALPHA;
+  float m_pupilFactorPrev = 0.5f;
+  uint32_t m_lastUpdate = 0;
 };
 
 #endif

@@ -34,7 +34,7 @@ bool EyeAnimator::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
   m_normalClosure = eyeDef.eyelid.normalClosure;
   m_wideClosure = eyeDef.eyelid.wideClosure;
 
-  setPupilRange(eyeDef.pupil.minFraction, eyeDef.pupil.maxFraction);
+  setPupilRange(eyeDef.iris.minFraction, eyeDef.pupil.maxFraction);
   m_irisCenter = 0.5f;
 
   m_blink.setNormalGap(m_normalClosure);
@@ -75,6 +75,11 @@ void EyeAnimator::setLightSensor(int pin, uint16_t minVal, uint16_t maxVal, floa
   {
     pinMode(pin, INPUT);
   }
+}
+
+void EyeAnimator::setLuxSensor(class LuxSensor *sensor)
+{
+  m_luxSensor = sensor;
 }
 
 /**
@@ -129,7 +134,7 @@ void EyeAnimator::update(uint32_t now)
     m_eyeIndex = pending;
     m_eyeDef = s_eyeRegistry[pending];
     m_renderer.begin(m_display, *m_eyeDef);
-    setPupilRange(m_eyeDef->pupil.minFraction, m_eyeDef->pupil.maxFraction);
+    setPupilRange(m_eyeDef->iris.minFraction, m_eyeDef->pupil.maxFraction);
     m_normalClosure = m_eyeDef->eyelid.normalClosure;
     m_wideClosure = m_eyeDef->eyelid.wideClosure;
     m_blink.setNormalGap(m_normalClosure);
@@ -255,10 +260,23 @@ void EyeAnimator::update(uint32_t now)
     m_wideJustDeactivated = false;
   }
 
-  if (m_lightSensorPin >= 0)
+  if (m_lightSensorPin >= 0 || m_luxSensor != nullptr)
   {
-    // Update m_irisCenter from the sensor; the oscillation (hippus) runs below.
-    updateLightSensor(now);
+    if (m_lightSensorPin >= 0)
+    {
+      updateLightSensor(now);
+    }
+    if (m_luxSensor != nullptr)
+    {
+      m_luxSensor->update();
+      float pupilFactor = m_luxSensor->getPupilFactor();
+      if (pupilFactor >= 0.0f)
+      {
+        // pupilFactor: 1.0 = brightest (most constricted), 0.0 = darkest (most dilated).
+        // m_irisCenter: 1.0 = most dilated (largest iris), 0.0 = most constricted.
+        m_irisCenter = 1.0f - pupilFactor;
+      }
+    }
   }
   if (m_remotePupilFactor < 0.0f)
   {

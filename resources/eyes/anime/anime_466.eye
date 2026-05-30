@@ -1,16 +1,16 @@
 {
     "name": "anime_eye",
     "radiusFraction": 0.5,
-    "backColor": 31759,
+    "backColor": 0,
     "squint": 0,
     "pupil": {
         "color": 0,
         "slitRadius": 0,
         "minFraction": 0.35,
-        "maxFraction": 0.8
+        "maxFraction": 0.725
     },
     "iris": {
-        "radiusFraction": 0.5,
+"maxFraction": 0.5,
         "filename": "iris.png",
         "maxTexW": 256,
         "maxTexH": 116,

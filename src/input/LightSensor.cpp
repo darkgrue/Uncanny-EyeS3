@@ -53,6 +53,9 @@ bool LightSensor::begin()
   else
   {
     m_connected = true;
+    m_pupilFactor = 0.5f;
+    m_pupilFactorPrev = 0.5f;
+    m_lastUpdate = millis();
     Serial.printf("[LightSensor] Pin %d: Sensor connected (avg: %d, range: %d)\n", m_pin, avg, range);
   }
 
@@ -148,7 +151,14 @@ bool LightSensor::update()
     m_normalizedValue = powf(m_normalizedValue, m_curve);
   }
 
-  m_pupilFactor = 1.0f - m_normalizedValue;
+  float targetPupilFactor = 1.0f - m_normalizedValue;
+  uint32_t now = millis();
+  uint32_t dt = now - m_lastUpdate;
+  m_lastUpdate = now;
+  float alpha = 1.0f - powf(1.0f - m_smoothAlpha, dt / 100.0f);
+  alpha = constrain(alpha, 0.0f, 1.0f);
+  m_pupilFactorPrev = m_pupilFactor;
+  m_pupilFactor = m_pupilFactor + alpha * (targetPupilFactor - m_pupilFactor);
 
   return true;
 }

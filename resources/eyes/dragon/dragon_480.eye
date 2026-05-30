@@ -10,7 +10,7 @@
         "maxFraction": 0.8
     },
     "iris": {
-        "radiusFraction": 0.5,
+        "maxFraction": 0.5,
         "filename": "iris.png",
         "maxTexW": 256,
         "maxTexH": 115,

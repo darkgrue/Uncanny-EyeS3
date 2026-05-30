@@ -22,6 +22,7 @@
 #include "eye/EyeAnimator.h"
 #include "input/WiiChuck.h"
 #include "input/LightSensor.h"
+#include "input/LuxSensor.h"
 #include "input/GestureFaceInput.h"
 #include "network/EyeSync.h"
 #include "config/SDConfig.h"
@@ -52,6 +53,7 @@ static WiiChuckInput *s_wiiChuck = nullptr;
 static GestureFaceInput *s_gestureFace = nullptr;
 static EyeSyncManager *s_syncManager = nullptr;
 static LightSensor *s_lightSensor = nullptr;
+static LuxSensor *s_luxSensor = nullptr;
 
 #if defined(DEBUG_OVERLAY_ENABLED)
 static DebugOverlay s_debugOverlay;
@@ -309,15 +311,22 @@ void setupInput()
 #if defined(QWIIC_SDA) && defined(QWIIC_SCL)
   static WiiChuckInput chuck(0x52, Wire1);
   static GestureFaceInput gfd(0x72, 320, 240, &Wire1);
+  static LuxSensor lux(Wire1);
 #else
   static WiiChuckInput chuck;
   static GestureFaceInput gfd;
+  static LuxSensor lux(Wire);
 #endif
 
   static LightSensor lightSensor(LIGHT_PIN);
   if (lightSensor.begin())
   {
     s_lightSensor = &lightSensor;
+  }
+
+  if (lux.begin())
+  {
+    s_luxSensor = &lux;
   }
 
   if (chuck.begin())
@@ -340,19 +349,24 @@ void setupInput()
  */
 void setupLightSensor()
 {
-  if (s_lightSensor && s_lightSensor->isConnected())
+  if (s_luxSensor && s_luxSensor->isConnected())
+  {
+    s_animator->setLuxSensor(s_luxSensor);
+    Serial.println("Lux sensor (MAX44009) configured.");
+  }
+  else if (s_lightSensor && s_lightSensor->isConnected())
   {
     s_animator->setLightSensor(
         s_lightSensor->getPin(),
         s_lightSensor->getMinValue(),
         s_lightSensor->getMaxValue(),
         s_lightSensor->getCurve());
-    Serial.println("Light sensor configured.");
+    Serial.printf("Light sensor configured (Pin %u).\n", LIGHT_PIN);
   }
   else
   {
     s_animator->setLightSensor(-1, 0, 1023, 1.0f);
-    Serial.println("Light sensor not connected - using autonomous iris animation.");
+    Serial.println("No light sensor connected - using autonomous iris animation.");
   }
 }
 
@@ -558,6 +572,11 @@ void renderLoopTask(void *param)
         s_lightSensor->update();
       }
 
+      if (s_luxSensor)
+      {
+        s_luxSensor->update();
+      }
+
       s_animator->broadcastState();
       user_loop();
 
@@ -619,6 +638,10 @@ void loop()
       Serial.print(" WiiChuck");
     if (s_gestureFace)
       Serial.print(" GestureFace");
+    if (s_luxSensor && s_luxSensor->isConnected())
+      Serial.print(" MAX44009");
+    if (s_lightSensor && s_lightSensor->isConnected())
+      Serial.print(" LDR");
     if (s_syncManager)
     {
       s_syncManager->pruneDropped();

@@ -4206,7 +4206,7 @@ namespace eagle {
   const EyeDefinition eye PROGMEM = {
       "eagle_eye", 0.5, 0, 0, nullptr,
       { 0, 0.0, 0.35, 0.8 },
-      { 0.5, { iris_texture, 256, 95 }, 65224, 0, 0, 0, 0 },
+      { 0.5, 0.3, { iris_texture, 256, 95 }, 65224, 0, 0, 0, 0 },
       { { sclera_texture, 128, 64 }, 65535, 0, 0, 0, 0 },
       { upper, lower, 0, 0.3, 0.0, true },
       { 233, nullptr, nullptr }
