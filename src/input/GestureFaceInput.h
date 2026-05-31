@@ -88,6 +88,9 @@ public:
   /** @brief Returns true if the sensor was found and initialized successfully. */
   bool isConnected() const { return m_connected; }
 
+  /** @brief Returns the number of faces detected in the last poll. */
+  uint16_t getFaceCount() const { return m_faceCount; }
+
   /**
    * @brief Set the minimum face confidence score required to drive eye movement.
    *
@@ -106,6 +109,7 @@ private:
   float m_targetY = 0.0f;                    // Normalized gaze Y (-1..+1)
   bool m_hasFace = false;                    // True when a face is actively tracked
   bool m_connected = false;                  // True after successful begin()
+  uint16_t m_faceCount = 0;                 // Face count from last valid poll
   uint16_t m_frameW;                         // Camera frame width for normalization
   uint16_t m_frameH;                         // Camera frame height for normalization
   uint8_t m_minScore = 50;                   // Minimum confidence score threshold

@@ -637,7 +637,7 @@ void loop()
     if (s_wiiChuck)
       Serial.print(" WiiChuck");
     if (s_gestureFace)
-      Serial.print(" GestureFace");
+      Serial.printf(" GestureFace(%u)", s_gestureFace->getFaceCount());
     if (s_luxSensor && s_luxSensor->isConnected())
       Serial.print(" MAX44009");
     if (s_lightSensor && s_lightSensor->isConnected())

@@ -70,9 +70,11 @@ bool GestureFaceInput::update()
   uint16_t count = m_sensor.getFaceNumber();
   if (count == 0xFFFF || count == 0)
   {
+    m_faceCount = 0;
     m_hasFace = false;
     return false;
   }
+  m_faceCount = count;
 
   uint16_t score = m_sensor.getFaceScore();
   if (score == 0xFFFF || score < m_minScore)
