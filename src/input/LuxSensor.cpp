@@ -15,6 +15,17 @@ LuxSensor::LuxSensor(TwoWire &wire) : m_sensor(), m_wirePtr(&wire) {}
 
 bool LuxSensor::begin()
 {
+  // Adafruit_I2CDevice::begin() calls Wire.begin() internally which resets ESP32
+  // I2C state, causing the first endTransmission() to return 0 spuriously.
+  // Pre-check while the bus is already in a clean initialized state.
+  m_wirePtr->beginTransmission(MAX44009_DEFAULT_ADDRESS);
+  if (m_wirePtr->endTransmission() != 0)
+  {
+    m_connected = false;
+    Serial.println("[LuxSensor] MAX44009 not found at 0x4A");
+    return false;
+  }
+
   if (!m_sensor.begin(MAX44009_DEFAULT_ADDRESS, m_wirePtr))
   {
     m_connected = false;
@@ -41,7 +52,14 @@ bool LuxSensor::begin()
     delay(20);
   }
 
-  float avgLux = (validSamples > 0) ? (luxSum / validSamples) : 100.0f;
+  if (validSamples == 0)
+  {
+    m_connected = false;
+    Serial.println("[LuxSensor] MAX44009: no valid readings during calibration");
+    return false;
+  }
+
+  float avgLux = luxSum / validSamples;
   m_minLux = avgLux * 0.5f;
   m_maxLux = avgLux * 2.0f;
 
