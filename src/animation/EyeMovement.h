@@ -186,6 +186,10 @@
 #define JOYSTICK_BASE_ALPHA 0.12f
 #define JOYSTICK_DIST_ALPHA 0.30f
 
+// Face tracking smooth-follow (slower than joystick; face position changes more gradually)
+#define FACE_BASE_ALPHA 0.05f
+#define FACE_DIST_ALPHA 0.15f
+
 // ============================================================================
 // EYELID / BLINK PARAMETERS
 // ============================================================================

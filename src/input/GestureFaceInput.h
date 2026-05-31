@@ -109,6 +109,8 @@ private:
   uint16_t m_frameW;                         // Camera frame width for normalization
   uint16_t m_frameH;                         // Camera frame height for normalization
   uint8_t m_minScore = 50;                   // Minimum confidence score threshold
+  uint32_t m_lastPollMs = 0;                 // Timestamp of last sensor poll
+  static constexpr uint32_t POLL_INTERVAL_MS = 100; // 10 Hz max poll rate (each read has 5ms blocking delay)
 };
 
 #endif // GESTURE_FACE_INPUT_H

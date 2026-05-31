@@ -178,9 +178,30 @@ void EyeAnimator::update(uint32_t now)
   else if (m_faceInput && m_faceInput->hasExclusiveControl())
   {
     m_hadJoystickControl = false;
-    m_faceWasTracking = true;
-    m_movement.setTarget(m_faceInput->getTargetX(), m_faceInput->getTargetY());
     m_movement.setRandomMode(false);
+
+    float tx = m_faceInput->getTargetX();
+    float ty = m_faceInput->getTargetY();
+
+    // Seed the smooth position from the current eye position on the first frame
+    // of face control so the eye doesn't jump from its current location.
+    if (!m_faceWasTracking)
+    {
+      m_faceSmX = m_movement.getX();
+      m_faceSmY = m_movement.getY();
+    }
+    m_faceWasTracking = true;
+
+    // Adaptive EMA: blend factor scales with distance so a face moving quickly
+    // gets a faster response while small movements remain smooth.
+    float dx = tx - m_faceSmX;
+    float dy = ty - m_faceSmY;
+    float dist = sqrtf(dx * dx + dy * dy);
+    float alpha = constrain(FACE_BASE_ALPHA + dist * FACE_DIST_ALPHA, 0.0f, 1.0f);
+    m_faceSmX += alpha * dx;
+    m_faceSmY += alpha * dy;
+
+    m_movement.setCurrentPosition(m_faceSmX, m_faceSmY);
   }
   else
   {

@@ -146,12 +146,11 @@ public:
   /** @brief Hold eyelids closed. */
   void eyesClose() { m_blink.close(); }
 
-  /** @brief Return to normal eyelid state and resume random movement. */
+  /** @brief Return to normal eyelid state. Movement mode is managed by the update() control block. */
   void eyesNormal()
   {
     m_blink.setNormalGap(m_normalClosure);
     m_blink.normal();
-    m_movement.setRandomMode(true);
     if (m_wideActive)
       m_wideJustDeactivated = true;
     m_wideActive = false;
@@ -232,6 +231,9 @@ private:
   float m_joystickSmY = 0.0f;       // Exponentially-smoothed joystick Y target
   bool  m_hadJoystickControl = false; // True on the previous frame if joystick was driving
 
+  // Face tracking smooth-follow state
+  float m_faceSmX = 0.0f;           // Exponentially-smoothed face X target
+  float m_faceSmY = 0.0f;           // Exponentially-smoothed face Y target
   bool     m_faceWasTracking = false;     // True when face input had control last frame
   bool     m_wideActive = false;          // True while eyesWide() is held
   bool     m_wideJustActivated = false;   // True on the first frame of a new wide activation

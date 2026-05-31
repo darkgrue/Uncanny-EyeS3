@@ -310,7 +310,7 @@ void setupInput()
 {
 #if defined(QWIIC_SDA) && defined(QWIIC_SCL)
   static WiiChuckInput chuck(0x52, Wire1);
-  static GestureFaceInput gfd(0x72, 320, 240, &Wire1);
+  static GestureFaceInput gfd(0x72, 640, 480, &Wire1);
   static LuxSensor lux(Wire1);
 #else
   static WiiChuckInput chuck;
