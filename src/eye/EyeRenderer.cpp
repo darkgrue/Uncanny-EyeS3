@@ -608,18 +608,15 @@ void IRAM_ATTR EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFacto
     }
 
     // Fill left gap (outside circle) with background color.
-    for (int x = minX; x < xCircStart; x++)
-      rowBuf[x] = bgColorBE;
+    fill16packed(rowBuf + minX, bgColorBE, xCircStart - minX);
 
     // Fill right gap (outside circle) with background color.
-    for (int x = xCircEnd; x < maxX; x++)
-      rowBuf[x] = bgColorBE;
+    fill16packed(rowBuf + xCircEnd, bgColorBE, maxX - xCircEnd);
 
     // Eyelid rows: fill circle portion with bgColor so drawEyelids() paints on top.
     if (!m_hasCustomLids && (y <= upperRow || y >= lowerRow))
     {
-      for (int x = xCircStart; x < xCircEnd; x++)
-        rowBuf[x] = bgColorBE;
+      fill16packed(rowBuf + xCircStart, bgColorBE, xCircEnd - xCircStart);
       continue;
     }
 
