@@ -24,7 +24,7 @@
 #define LCD_CS 10
 #define LCD_RST 17
 #define LCD_EN 16
-#define QSPI_FREQUENCY 90000000
+#define QSPI_FREQUENCY 80000000
 #elif defined(ARDUINO_LILYGO_T_RGB)
 #define BOARD_NAME "T-RGB"
 #define LCD_WIDTH 466
