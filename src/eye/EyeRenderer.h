@@ -109,6 +109,12 @@ private:
   const uint16_t *m_irisAnglePtrs[256] = {};
   const uint16_t *m_scleraAnglePtrs[256] = {};
 
+  // Per-row precomputed circle and iris x-extent tables indexed by qy = |dy| (0..mapRadius-1).
+  // Built once in begin() from eyeRadius / irisRadius (constant per eye definition).
+  // Eliminates two sqrtf calls per row in renderFrame().
+  int16_t *m_xCircHalfW  = nullptr; // [qy] max |dx| still inside the eye circle
+  int16_t *m_xIrisLimTab = nullptr; // [qy] max |dx| still inside the iris boundary (-1 = none)
+
   // Async transfer task pinned to Core 0 — overlaps the next render with the current transfer.
   TaskHandle_t m_xferTask = nullptr;
   SemaphoreHandle_t m_xferReady = nullptr; // render→task: new frame ready to send

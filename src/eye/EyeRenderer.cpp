@@ -86,6 +86,16 @@ EyeRenderer::~EyeRenderer()
     heap_caps_free(m_radiusMapCache);
     m_radiusMapCache = nullptr;
   }
+  if (m_xCircHalfW)
+  {
+    heap_caps_free(m_xCircHalfW);
+    m_xCircHalfW = nullptr;
+  }
+  if (m_xIrisLimTab)
+  {
+    heap_caps_free(m_xIrisLimTab);
+    m_xIrisLimTab = nullptr;
+  }
   if (m_xferTask)
   {
     vTaskDelete(m_xferTask);
@@ -201,6 +211,16 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
     heap_caps_free(m_radiusMapCache);
     m_radiusMapCache = nullptr;
   }
+  if (m_xCircHalfW)
+  {
+    heap_caps_free(m_xCircHalfW);
+    m_xCircHalfW = nullptr;
+  }
+  if (m_xIrisLimTab)
+  {
+    heap_caps_free(m_xIrisLimTab);
+    m_xIrisLimTab = nullptr;
+  }
 
   // Allocate in priority order: angle map and radius map first (hot inner-loop lookups),
   // then iris texture, then sclera (largest, most cache-unfriendly — can tolerate PSRAM).
@@ -244,6 +264,47 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
     }
     else
       Serial.println("[EyeRenderer] Warning: failed to allocate radius map");
+  }
+
+  // Precompute per-row circle and iris x-extent tables (indexed by qy = |dy|, 0..mapRadius-1).
+  // These replace two sqrtf calls and the fine-tune correction loops per row in renderFrame().
+  if (m_mapRadius > 0)
+  {
+    size_t tabSz = (size_t)m_mapRadius * sizeof(int16_t);
+
+    m_xCircHalfW = (int16_t *)heap_caps_malloc(tabSz, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (m_xCircHalfW)
+    {
+      uint16_t eR   = eyeRadiusPixels(eyeDef);
+      int      eRSq = (int)eR * (int)eR;
+      for (int qy = 0; qy < m_mapRadius; qy++)
+      {
+        int dxMaxSq = eRSq - qy * qy;
+        if (dxMaxSq <= 0) { m_xCircHalfW[qy] = 0; continue; }
+        int v = (int)sqrtf((float)dxMaxSq);
+        while ((v + 1) * (v + 1) <= dxMaxSq) v++;
+        m_xCircHalfW[qy] = (int16_t)v;
+      }
+      Serial.printf("[EyeRenderer] xCircHalfW table: %zu bytes DRAM\n", tabSz);
+    }
+
+    m_xIrisLimTab = (int16_t *)heap_caps_malloc(tabSz, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (m_xIrisLimTab && m_radiusMapCache)
+    {
+      uint16_t iR  = irisRadiusPixels(eyeDef);
+      int      ir2 = (int)iR * (int)iR;
+      for (int qy = 0; qy < m_mapRadius; qy++)
+      {
+        if (qy * qy >= ir2) { m_xIrisLimTab[qy] = -1; continue; }
+        int xIL = (int)sqrtf((float)(ir2 - qy * qy));
+        if (xIL >= m_mapRadius) xIL = m_mapRadius - 1;
+        const uint8_t *rRow = m_radiusMapCache + (size_t)qy * m_mapRadius;
+        while (xIL + 1 < m_mapRadius && (int)rRow[xIL + 1] <= (int)iR) xIL++;
+        while (xIL >= 0 && (int)rRow[xIL] > (int)iR) xIL--;
+        m_xIrisLimTab[qy] = (int16_t)xIL;
+      }
+      Serial.printf("[EyeRenderer] xIrisLimTab table: %zu bytes DRAM\n", tabSz);
+    }
   }
 
   if (eyeDef.iris.texture.data && eyeDef.iris.texture.width > 0 && eyeDef.iris.texture.height > 0)
@@ -518,15 +579,26 @@ void IRAM_ATTR EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFacto
     int dy = y - eyeCenterY;
     int dySq = dy * dy;
     int dxMaxSq = eyeRadiusSq - dySq;
+    // qy is used by both the circle-bounds table and the texture lookup below.
+    int qy = dy < 0 ? -dy : dy;
+    if (qy >= m_mapRadius)
+      qy = m_mapRadius - 1;
 
     // Compute circle bounds for this row. Default to empty range when outside circle.
     int xCircStart = eyeCenterX;
     int xCircEnd = eyeCenterX;
     if (dxMaxSq > 0)
     {
-      int dxMax = (int)sqrtf((float)dxMaxSq);
-      if ((dxMax + 1) * (dxMax + 1) <= dxMaxSq)
-        dxMax++;
+      int dxMax;
+      if (m_xCircHalfW && qy < m_mapRadius)
+      {
+        dxMax = (int)m_xCircHalfW[qy];
+      }
+      else
+      {
+        dxMax = (int)sqrtf((float)dxMaxSq);
+        while ((dxMax + 1) * (dxMax + 1) <= dxMaxSq) dxMax++;
+      }
       xCircStart = eyeCenterX - dxMax;
       xCircEnd = eyeCenterX + dxMax;
       if (xCircStart < minX)
@@ -555,9 +627,7 @@ void IRAM_ATTR EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFacto
       continue;
 
     // Hoist per-row values for texture lookups.
-    int qy = dy < 0 ? -dy : dy;
-    if (qy >= m_mapRadius)
-      qy = m_mapRadius - 1;
+    // qy is already computed above (reused from circle-bounds table lookup).
     const uint8_t *angleRow = (hasIrisTex || hasScleraTex)
                                   ? (angleBase + (size_t)qy * m_mapRadius)
                                   : nullptr;
@@ -593,16 +663,23 @@ void IRAM_ATTR EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFacto
         while (xPupilLim >= 0 && (int)radiusRow[xPupilLim] > (int)pupilRadius)
           xPupilLim--;
       }
-      int ir2 = (int)irisRadius * (int)irisRadius;
-      if (dySq < ir2)
+      if (m_xIrisLimTab && qy < m_mapRadius)
       {
-        xIrisLim = (int)sqrtf((float)(ir2 - dySq));
-        if (xIrisLim >= m_mapRadius)
-          xIrisLim = m_mapRadius - 1;
-        while (xIrisLim + 1 < m_mapRadius && (int)radiusRow[xIrisLim + 1] <= (int)irisRadius)
-          xIrisLim++;
-        while (xIrisLim >= 0 && (int)radiusRow[xIrisLim] > (int)irisRadius)
-          xIrisLim--;
+        xIrisLim = (int)m_xIrisLimTab[qy];
+      }
+      else
+      {
+        int ir2 = (int)irisRadius * (int)irisRadius;
+        if (dySq < ir2)
+        {
+          xIrisLim = (int)sqrtf((float)(ir2 - dySq));
+          if (xIrisLim >= m_mapRadius)
+            xIrisLim = m_mapRadius - 1;
+          while (xIrisLim + 1 < m_mapRadius && (int)radiusRow[xIrisLim + 1] <= (int)irisRadius)
+            xIrisLim++;
+          while (xIrisLim >= 0 && (int)radiusRow[xIrisLim] > (int)irisRadius)
+            xIrisLim--;
+        }
       }
     }
 
