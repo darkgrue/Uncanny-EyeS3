@@ -14,6 +14,19 @@
 #include <algorithm>
 #include <esp_heap_caps.h>
 
+// Write `count` pixels of `color` to `dst` using 32-bit paired stores.
+// Two pixels per iteration halves store transactions to PSRAM.
+static inline void fill16packed(uint16_t *dst, uint16_t color, int count)
+{
+  uint32_t packed = ((uint32_t)color << 16) | color;
+  uint32_t *d = (uint32_t *)dst;
+  int pairs = count >> 1;
+  while (pairs--)
+    *d++ = packed;
+  if (count & 1)
+    *(uint16_t *)d = color;
+}
+
 // Include the precomputed polar angle table for the active display.
 // These large PROGMEM arrays must be defined in exactly one translation unit;
 // keeping the include here (not in a shared header) achieves that.
@@ -593,65 +606,145 @@ void IRAM_ATTR EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFacto
       }
     }
 
-    for (int x = xCircStart; x < xCircEnd; x++)
+    // === Render eye circle: 5 zone segments, no per-pixel zone branches ===
+    // Fast path (no slit, radius map available): translate per-row qx limits into
+    // absolute x boundaries, then render each zone in a dedicated branch-free loop.
+    // Left segments use qx = eyeCenterX - x and angleSign = leftSign (constant per row).
+    // Right segments use qx = x - eyeCenterX and angleSign = rightSign (constant per row).
+    // Sentinel: irisLeft = eyeCenterX when xIrisLim = -1 (row is entirely outside iris).
+    if (!hasSlit && radiusRow)
     {
-      int dx = x - eyeCenterX;
-      int qx = dx < 0 ? -dx : dx;
-      if (qx >= m_mapRadius)
-        qx = m_mapRadius - 1;
+      int irisLeft   = (xIrisLim  >= 0) ? (eyeCenterX - xIrisLim)  : eyeCenterX;
+      int irisRight  = (xIrisLim  >= 0) ? (eyeCenterX + xIrisLim)  : (eyeCenterX - 1);
+      int pupilLeft  = (xPupilLim >= 0) ? (eyeCenterX - xPupilLim) : eyeCenterX;
+      int pupilRight = (xPupilLim >= 0) ? (eyeCenterX + xPupilLim) : (eyeCenterX - 1);
 
-      uint16_t color;
-
-      if (!hasSlit && radiusRow)
+      // --- Segment 1: left sclera [xCircStart, irisLeft) ---
       {
-        // Fast path: zone determined by precomputed per-row qx limits — no r comparison needed.
-        if (qx <= xPupilLim)
+        int xEnd = (irisLeft < xCircEnd) ? irisLeft : xCircEnd;
+        if (hasScleraTex)
         {
-          color = pupilColorBE;
-        }
-        else if (qx <= xIrisLim)
-        {
-          if (hasIrisTex)
+          for (int x = xCircStart; x < xEnd; x++)
           {
+            int qx = eyeCenterX - x;
+            if (qx >= m_mapRadius) qx = m_mapRadius - 1;
             int r = (int)radiusRow[qx];
             uint8_t ta = angleRow[qx];
-            int angleSign = dx < 0 ? leftSign : rightSign;
-            uint8_t fullAngle = (uint8_t)(angleOffset + angleSign * (ta >> 1)) + irisRot;
-            int texV = (int)(((uint32_t)r * irisTexVMul) >> 16);
-            if (texV >= irisTexH)
-              texV = irisTexH - 1;
-            color = m_irisAnglePtrs[fullAngle][texV];
-          }
-          else
-          {
-            color = irisColorBE;
+            uint8_t fullAngle = (uint8_t)(angleOffset + leftSign * (ta >> 1)) + scleraRot;
+            int rv = r - (int)irisRadius;
+            if (rv < 0) rv = 0;
+            int texV = (int)(((uint32_t)rv * scleraTexVMul) >> 16);
+            if (texV >= scleraTexH) texV = scleraTexH - 1;
+            rowBuf[x] = m_scleraAnglePtrs[fullAngle][texV];
           }
         }
         else
         {
-          if (hasScleraTex)
+          fill16packed(rowBuf + xCircStart, scleraColorBE, xEnd - xCircStart);
+        }
+      }
+
+      // --- Segment 2: left iris [irisLeft, pupilLeft) ---
+      {
+        int xStart = (irisLeft  > xCircStart) ? irisLeft  : xCircStart;
+        int xEnd   = (pupilLeft < xCircEnd)   ? pupilLeft : xCircEnd;
+        if (xStart < xEnd)
+        {
+          if (hasIrisTex)
           {
-            int r = (int)radiusRow[qx];
-            uint8_t ta = angleRow[qx];
-            int angleSign = dx < 0 ? leftSign : rightSign;
-            uint8_t fullAngle = (uint8_t)(angleOffset + angleSign * (ta >> 1)) + scleraRot;
-            int rv = r - (int)irisRadius;
-            if (rv < 0)
-              rv = 0;
-            int texV = (int)(((uint32_t)rv * scleraTexVMul) >> 16);
-            if (texV >= scleraTexH)
-              texV = scleraTexH - 1;
-            color = m_scleraAnglePtrs[fullAngle][texV];
+            for (int x = xStart; x < xEnd; x++)
+            {
+              int qx = eyeCenterX - x;
+              if (qx >= m_mapRadius) qx = m_mapRadius - 1;
+              int r = (int)radiusRow[qx];
+              uint8_t ta = angleRow[qx];
+              uint8_t fullAngle = (uint8_t)(angleOffset + leftSign * (ta >> 1)) + irisRot;
+              int texV = (int)(((uint32_t)r * irisTexVMul) >> 16);
+              if (texV >= irisTexH) texV = irisTexH - 1;
+              rowBuf[x] = m_irisAnglePtrs[fullAngle][texV];
+            }
           }
           else
           {
-            color = scleraColorBE;
+            fill16packed(rowBuf + xStart, irisColorBE, xEnd - xStart);
           }
         }
       }
-      else
+
+      // --- Segment 3: pupil [pupilLeft, pupilRight+1) — solid packed fill ---
       {
-        // Fallback: slit pupil or no radius map.
+        int xStart = (pupilLeft  > xCircStart)   ? pupilLeft      : xCircStart;
+        int xEnd   = (pupilRight < xCircEnd - 1) ? pupilRight + 1 : xCircEnd;
+        if (xStart < xEnd)
+          fill16packed(rowBuf + xStart, pupilColorBE, xEnd - xStart);
+      }
+
+      // --- Segment 4: right iris [pupilRight+1, irisRight+1) ---
+      {
+        int xStart = (pupilRight + 1 > xCircStart) ? pupilRight + 1 : xCircStart;
+        int xEnd   = (irisRight  + 1 < xCircEnd)   ? irisRight  + 1 : xCircEnd;
+        if (xStart < xEnd)
+        {
+          if (hasIrisTex)
+          {
+            for (int x = xStart; x < xEnd; x++)
+            {
+              int qx = x - eyeCenterX;
+              if (qx >= m_mapRadius) qx = m_mapRadius - 1;
+              int r = (int)radiusRow[qx];
+              uint8_t ta = angleRow[qx];
+              uint8_t fullAngle = (uint8_t)(angleOffset + rightSign * (ta >> 1)) + irisRot;
+              int texV = (int)(((uint32_t)r * irisTexVMul) >> 16);
+              if (texV >= irisTexH) texV = irisTexH - 1;
+              rowBuf[x] = m_irisAnglePtrs[fullAngle][texV];
+            }
+          }
+          else
+          {
+            fill16packed(rowBuf + xStart, irisColorBE, xEnd - xStart);
+          }
+        }
+      }
+
+      // --- Segment 5: right sclera [irisRight+1, xCircEnd) ---
+      {
+        int xStart = (irisRight + 1 > xCircStart) ? irisRight + 1 : xCircStart;
+        if (xStart < xCircEnd)
+        {
+          if (hasScleraTex)
+          {
+            for (int x = xStart; x < xCircEnd; x++)
+            {
+              int qx = x - eyeCenterX;
+              if (qx >= m_mapRadius) qx = m_mapRadius - 1;
+              int r = (int)radiusRow[qx];
+              uint8_t ta = angleRow[qx];
+              uint8_t fullAngle = (uint8_t)(angleOffset + rightSign * (ta >> 1)) + scleraRot;
+              int rv = r - (int)irisRadius;
+              if (rv < 0) rv = 0;
+              int texV = (int)(((uint32_t)rv * scleraTexVMul) >> 16);
+              if (texV >= scleraTexH) texV = scleraTexH - 1;
+              rowBuf[x] = m_scleraAnglePtrs[fullAngle][texV];
+            }
+          }
+          else
+          {
+            fill16packed(rowBuf + xStart, scleraColorBE, xCircEnd - xStart);
+          }
+        }
+      }
+    }
+    else
+    {
+      // Fallback: slit pupil or no radius map — original per-pixel logic unchanged.
+      for (int x = xCircStart; x < xCircEnd; x++)
+      {
+        int dx = x - eyeCenterX;
+        int qx = dx < 0 ? -dx : dx;
+        if (qx >= m_mapRadius)
+          qx = m_mapRadius - 1;
+
+        uint16_t color;
         int r = radiusRow ? (int)radiusRow[qx] : (int)sqrtf((float)(qx * qx + qy * qy));
         bool inPupil;
         if (hasSlit)
@@ -706,8 +799,8 @@ void IRAM_ATTR EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFacto
             color = scleraColorBE;
           }
         }
+        rowBuf[x] = color;
       }
-      rowBuf[x] = color;
     }
   }
 
