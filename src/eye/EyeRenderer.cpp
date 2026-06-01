@@ -359,9 +359,9 @@ void EyeRenderer::xferTaskFunc(void *pv)
  * @param irisAngle Iris texture rotation (0-1023, mapped to 0-255 angle space).
  * @param scleraAngle Sclera texture rotation (0-1023, mapped to 0-255 angle space).
  */
-void EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
-                              float upperLidFactor, float lowerLidFactor, float blinkFactor,
-                              uint16_t irisAngle, uint16_t scleraAngle)
+void IRAM_ATTR EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFactor,
+                                        float upperLidFactor, float lowerLidFactor, float blinkFactor,
+                                        uint16_t irisAngle, uint16_t scleraAngle)
 {
   if (!m_display || !m_eyeDef || !m_renderBuf)
   {
