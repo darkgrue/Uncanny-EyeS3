@@ -13,10 +13,6 @@
 #include <WiFi.h>
 
 EyeAnimator::EyeAnimator()
-    : m_display(nullptr), m_input(nullptr), m_sync(nullptr), m_eyeDef(nullptr),
-      m_lightSensorPin(-1), m_lastLightRead(0), m_booped(false),
-      m_needsRender(true), m_initialized(false),
-      m_irisCenter(0.5f), m_irisCenterPrev(0.5f), m_lightSmoothAlpha(0.2f)
 {
 }
 
@@ -147,6 +143,22 @@ void EyeAnimator::update(uint32_t now)
     m_input->update();
   if (m_faceInput)
     m_faceInput->update();
+
+#if defined(FDEBUG)
+  {
+    static uint32_t s_lastFaceDiag = 0;
+    if (m_faceInput && (now - s_lastFaceDiag > 500))
+    {
+      s_lastFaceDiag = now;
+      bool joyCtrl  = m_input      && m_input->hasExclusiveControl();
+      bool faceCtrl = m_faceInput->hasExclusiveControl();
+      Serial.printf("[EyeAnimator] mode=%s faceExcl=%d joyExcl=%d eye=(%.2f,%.2f)\n",
+                    joyCtrl ? "JOYSTICK" : faceCtrl ? "FACE" : "AUTONOMOUS",
+                    (int)faceCtrl, (int)joyCtrl,
+                    m_movement.getX(), m_movement.getY());
+    }
+  }
+#endif
 
   if (m_input && m_input->hasExclusiveControl())
   {
