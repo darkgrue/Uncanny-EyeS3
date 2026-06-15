@@ -2,6 +2,14 @@
 
 A port of the [Adafruit M4 Eyes](https://github.com/adafruit/Adafruit_Learning_System_Guides/tree/main/M4_Eyes) project to the LilyGo T-Display S3 AMOLED and T-RGB, with ESP32-specific rendering optimizations, WiiChuck puppeteering, light-driven pupil control, Gesture & Face Detection Sensor support for gaze direction, and multi-device synchronization over ESP-NOW.
 
+This codebase is based on code and ideas from the following projects:
+
+&emsp;https://github.com/adafruit/Uncanny_Eyes  
+&emsp;https://github.com/adafruit/Adafruit_Learning_System_Guides/tree/main/M4_Eyes  
+&emsp;https://github.com/chrismiller/TeensyEyes  
+&emsp;https://github.com/MichaelMeissner/TeensyEyes/tree/meissner2  
+
+
 ---
 
 ## Supported Hardware

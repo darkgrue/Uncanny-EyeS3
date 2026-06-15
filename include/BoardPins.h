@@ -8,9 +8,6 @@
 #ifndef BOARD_PINS_H
 #define BOARD_PINS_H
 
-// Battery ADC
-#define BATTERY_VOLTAGE_ADC_DATA 4
-
 // Display Configuration
 #if defined(ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED)
 #define BOARD_NAME "T-Display S3 AMOLED"
@@ -24,7 +21,6 @@
 #define LCD_CS 10
 #define LCD_RST 17
 #define LCD_EN 16
-#define QSPI_FREQUENCY 80000000
 #elif defined(ARDUINO_LILYGO_T_RGB)
 #define BOARD_NAME "T-RGB"
 #define LCD_WIDTH 466
@@ -37,12 +33,14 @@
 #define LCD_CS 10
 #define LCD_RST 17
 #define LCD_EN 16
-#define QSPI_FREQUENCY 90000000
 #else
 #define BOARD_NAME "Unknown"
 #define LCD_WIDTH 466
 #define LCD_HEIGHT 466
 #endif
+
+//  Quad SPI Configuration
+#define QSPI_FREQUENCY 80000000
 
 // I2C Bus Configuration
 #if defined(ARDUINO_LILYGO_T_DISPLAY_S3_AMOLED)
@@ -59,6 +57,9 @@
 #define IIC_SDA 21
 #define IIC_SCL 22
 #endif
+
+// Battery ADC
+#define BATTERY_VOLTAGE_ADC_DATA 4
 
 // Light Sensor
 #define LIGHT_PIN 5
