@@ -416,6 +416,16 @@ void EyeRenderer::xferTaskFunc(void *pv)
                                     self->m_displaySize, self->m_displaySize);
     self->m_xferUs = micros() - t0;
     xSemaphoreGive(self->m_xferDone);
+
+    // The render task (Core 1) is usually already parked on m_xferDone by the
+    // time a transfer finishes, so it hands back m_xferReady within
+    // microseconds — this task would otherwise start the next ~27ms transfer
+    // back-to-back with zero gap, forever. Since this loop is pinned to
+    // Core 0 at priority 5 (above IDLE0), a true zero-gap loop starves
+    // IDLE0 long enough to trip the Task Watchdog (confirmed via flash
+    // coredump: "Task watchdog got triggered ... IDLE0 (CPU 0)", 2026-06-21).
+    // One tick is enough for the scheduler to run IDLE0 and feed the TWDT.
+    vTaskDelay(1);
   }
 }
 

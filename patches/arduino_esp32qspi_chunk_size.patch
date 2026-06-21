@@ -37,6 +37,33 @@
 
 --- a/GFX Library for Arduino/src/databus/Arduino_ESP32QSPI.cpp
 +++ b/GFX Library for Arduino/src/databus/Arduino_ESP32QSPI.cpp
+@@ -700,9 +700,19 @@
+ GFX_INLINE void Arduino_ESP32QSPI::POLL_START()
+ {
+-  spi_device_polling_start(_handle, _spi_tran, portMAX_DELAY);
++  // Surface failures that were previously silently
++  // discarded. If polling_start ever returns non-OK, polling_end's internal
++  // assert would otherwise fire blind with no prior log line.
++  esp_err_t ret = spi_device_polling_start(_handle, _spi_tran, portMAX_DELAY);
++  if (ret != ESP_OK)
++  {
++    log_e("spi_device_polling_start failed: %d (handle=%p tran=%p)", ret, _handle, _spi_tran);
++  }
+ }
+
+ GFX_INLINE void Arduino_ESP32QSPI::POLL_END()
+ {
+-  spi_device_polling_end(_handle, portMAX_DELAY);
++  // See POLL_START above.
++  esp_err_t ret = spi_device_polling_end(_handle, portMAX_DELAY);
++  if (ret != ESP_OK)
++  {
++    log_e("spi_device_polling_end failed: %d (handle=%p)", ret, _handle);
++  }
+ }
+
+--- a/GFX Library for Arduino/src/databus/Arduino_ESP32QSPI.cpp
++++ b/GFX Library for Arduino/src/databus/Arduino_ESP32QSPI.cpp
 @@ -102,7 +102,7 @@
    _buffer = (uint8_t *)heap_caps_aligned_alloc(16, ESP32QSPI_MAX_PIXELS_AT_ONCE * 2, MALLOC_CAP_DMA);
    if (!_buffer)

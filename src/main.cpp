@@ -33,6 +33,7 @@
 #include <Wire.h>
 #include <esp_wifi.h>
 #include "driver/i2c_master.h"
+#include <esp_heap_caps.h>
 
 // #define DEBUG_FPS_ENABLED           // Comment out to suppress FPS diagnostic messages on serial
 // #define DEBUG_TIMING_ENABLED        // Comment out to suppress timing diagnostic messages on serial
@@ -523,7 +524,7 @@ void setup()
 }
 
 /**
- * @brief Eye rendering task running on Core 1 at ~120 FPS.
+ * @brief Eye rendering task running on Core 1, requesting frames up to ~120 FPS.
  *
  * Updates the animation state machine, polls the light sensor, broadcasts
  * to ESP-NOW peers, and triggers rendering when needed. Handles both
@@ -534,7 +535,12 @@ void renderLoopTask(void *param)
   (void)param;
 
   uint32_t lastFrame = 0;
-  const uint32_t frameInterval = 8333; // ~120 FPS for smoother animation
+  // 8333us (~120 FPS) is a request ceiling, not the achieved rate: a full
+  // 466x466 QSPI transfer takes ~27ms (measured), so EyeRenderer's
+  // m_xferDone/m_xferReady handshake naturally throttles actual throughput
+  // to ~35-45 FPS regardless of this value. See EyeRenderer::xferTaskFunc
+  // for the Core 0 watchdog-starvation fix this throughput gap caused.
+  const uint32_t frameInterval = 8333;
 
 #if defined(DEBUG_FPS_ENABLED)
   s_frameCount = 0;
@@ -563,6 +569,22 @@ void renderLoopTask(void *param)
 
 #if defined(DEBUG_OVERLAY_ENABLED)
       s_debugOverlay.update();
+#endif
+
+#if defined(DEBUG_HEAP_INTEGRITY_CHECK)
+      // DIAGNOSTIC (temporary): walk all heaps periodically to localize when
+      // corruption first appears relative to the intermittent QSPI/SPI crash.
+      // Gated to ~2x/sec so the full-heap walk doesn't eat into frame budget.
+      static uint32_t s_lastHeapCheck = 0;
+      uint32_t nowMs = millis();
+      if (nowMs - s_lastHeapCheck >= 500)
+      {
+        s_lastHeapCheck = nowMs;
+        if (!heap_caps_check_integrity_all(true))
+        {
+          Serial.printf("[HeapCheck] CORRUPTION DETECTED at t=%lu ms\n", nowMs);
+        }
+      }
 #endif
 
       s_animator->update(millis());
