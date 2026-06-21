@@ -16,8 +16,13 @@
 
 // Write `count` pixels of `color` to `dst` using 32-bit paired stores.
 // Two pixels per iteration halves store transactions to PSRAM.
+// Some callers derive `count` from unclamped zone-boundary arithmetic that can
+// go negative at display-edge clipping; treat that as "nothing to fill" rather
+// than looping `while (pairs--)` on a negative count, which never terminates.
 static inline void fill16packed(uint16_t *dst, uint16_t color, int count)
 {
+  if (count <= 0)
+    return;
   uint32_t packed = ((uint32_t)color << 16) | color;
   uint32_t *d = (uint32_t *)dst;
   int pairs = count >> 1;
@@ -393,7 +398,7 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
     m_xferReady = xSemaphoreCreateBinary();
     m_xferDone = xSemaphoreCreateBinary();
     xSemaphoreGive(m_xferDone); // pre-signal: first frame has no prior transfer to wait on
-    xTaskCreatePinnedToCore(xferTaskFunc, "eyeXfer", 4096, this, 5, &m_xferTask, 0);
+    xTaskCreatePinnedToCore(xferTaskFunc, "eyeXfer", 8192, this, 5, &m_xferTask, 0);
     Serial.println("[EyeRenderer] Async transfer task created on Core 0");
   }
 

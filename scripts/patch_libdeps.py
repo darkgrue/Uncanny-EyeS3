@@ -15,7 +15,7 @@ def get_libdeps_dir():
     return env.subst("$PROJECT_LIBDEPS_DIR/$PIOENV")
 
 
-def sentinel_path(patch_file, libdeps_dir):
+def sentinel_path(patch_file, libdeps_dir, patch_text):
     """
     Returns the path for a sentinel file that marks a patch as applied.
 
@@ -24,11 +24,12 @@ def sentinel_path(patch_file, libdeps_dir):
     own applied state independently.  They are also automatically removed when
     PlatformIO cleans or rebuilds libdeps for that environment.
 
-    A short hash of the full patch path is included in the filename to avoid
-    collisions when two patches in different subdirectories share the same
-    base filename.
+    The hash covers both the full patch path (to avoid collisions when two
+    patches in different subdirectories share the same base filename) and the
+    patch file's contents, so editing a patch invalidates any sentinel left
+    over from a previous version instead of being silently skipped.
     """
-    patch_hash = hashlib.md5(patch_file.encode()).hexdigest()[:8]
+    patch_hash = hashlib.md5((patch_file + patch_text).encode()).hexdigest()[:8]
     basename = os.path.basename(patch_file)
     sentinel_name = f".patch_applied.{basename}.{patch_hash}"
     return os.path.join(libdeps_dir, sentinel_name)
@@ -130,42 +131,59 @@ def parse_patch(patch_text):
     return files
 
 
+def find_block(content_lines, hint, block):
+    """
+    Search content_lines for an exact match of block (a list of lines),
+    starting at hint and alternating outward to tolerate line-number drift
+    from earlier hunks. Returns the 0-based start index, or None if absent.
+    """
+    max_pos = len(content_lines) - len(block)
+    if max_pos < 0:
+        return None
+
+    visited = set()
+    for delta in range(0, len(content_lines) + 1):
+        for candidate in (hint + delta, hint - delta):
+            if 0 <= candidate <= max_pos and candidate not in visited:
+                visited.add(candidate)
+                if content_lines[candidate: candidate + len(block)] == block:
+                    return candidate
+
+    return None
+
+
 def apply_hunk(content_lines, hunk):
     """
     Apply a single hunk to content_lines (list of strings without newlines).
     Searches for the old_lines block starting near the hinted line number,
     then expands outward to handle line-number drift from previous hunks.
+
+    If old_lines can't be found but new_lines is already present at the
+    same location, the hunk is treated as already applied (idempotent) —
+    this happens when a previous run patched the file but couldn't record
+    a sentinel (e.g. a re-fetched/cached library that already carries the
+    patched content), and re-patching should be a no-op rather than a
+    hard failure.
+
     Returns the modified list, or raises RuntimeError on failure.
     """
     old = hunk["old_lines"]
     new = hunk["new_lines"]
+    hint = hunk["old_start"] - 1  # convert 1-based to 0-based
 
     if not old:
-        # Pure insertion — insert at hunk position
+        # Pure insertion — insert at hunk position, unless already present.
         pos = max(0, hunk["new_start"] - 1)
+        if content_lines[pos: pos + len(new)] == new:
+            return content_lines
         return content_lines[:pos] + new + content_lines[pos:]
 
-    hint = hunk["old_start"] - 1  # convert 1-based to 0-based
-    max_pos = len(content_lines) - len(old)
+    start = find_block(content_lines, hint, old)
+    if start is not None:
+        return content_lines[:start] + new + content_lines[start + len(old):]
 
-    if max_pos < 0:
-        raise RuntimeError(
-            f"File is shorter than the hunk context ({len(content_lines)} lines, "
-            f"hunk needs at least {len(old)})."
-        )
-
-    # Build search order: start at hint, then alternate outward
-    visited = set()
-    search_order = []
-    for delta in range(0, len(content_lines) + 1):
-        for candidate in (hint + delta, hint - delta):
-            if 0 <= candidate <= max_pos and candidate not in visited:
-                visited.add(candidate)
-                search_order.append(candidate)
-
-    for start in search_order:
-        if content_lines[start: start + len(old)] == old:
-            return content_lines[:start] + new + content_lines[start + len(old):]
+    if new and find_block(content_lines, hint, new) is not None:
+        return content_lines  # already applied
 
     raise RuntimeError(
         f"Could not find hunk context near line {hunk['old_start']}.\n"
@@ -212,15 +230,15 @@ def apply_patch_file(patch_path, libdeps_dir):
     Apply a single .patch file to the files it targets inside libdeps_dir.
     Uses a per-environment sentinel file in libdeps_dir to avoid re-applying.
     """
-    sentinel = sentinel_path(patch_path, libdeps_dir)
+    with open(patch_path, "r", encoding="utf-8", errors="replace") as f:
+        patch_text = f.read()
+
+    sentinel = sentinel_path(patch_path, libdeps_dir, patch_text)
     if os.path.exists(sentinel):
         print(f"  [SKIP]  Already applied: {os.path.basename(patch_path)}")
         return True
 
     print(f"  [APPLY] {os.path.basename(patch_path)}")
-
-    with open(patch_path, "r", encoding="utf-8", errors="replace") as f:
-        patch_text = f.read()
 
     file_patches = parse_patch(patch_text)
 
