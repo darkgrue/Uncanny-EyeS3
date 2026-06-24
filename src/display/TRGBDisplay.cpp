@@ -181,6 +181,18 @@ void TRGBDisplay::drawRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t 
   }
 }
 
+/**
+ * @brief Direct bulk transfer to the PSRAM framebuffer.
+ *
+ * Copies row-by-row from the source buffer to the display's PSRAM framebuffer.
+ * Assumes a 480-wide framebuffer pitch. This is the fastest bulk update path
+ * for the RGB panel since writes are synchronous.
+ *
+ * When `m_rotation180` is set (display mounted upside down), rows are copied
+ * back-to-front and each row's pixels are written in reverse order, mirroring
+ * the destination through the center of the whole physical panel instead of a
+ * straight memcpy.
+ */
 void TRGBDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
                                  int srcX, int srcY, int srcW, int srcH)
 {

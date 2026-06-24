@@ -702,6 +702,10 @@ void loop()
         s_display->setRotation(flag ? 2 : 0);
         Serial.printf("Display %s.\n", flag ? "upside-down" : "normal");
       }
+      else
+      {
+        Serial.println("Display not available.");
+      }
     }
   }
 }
