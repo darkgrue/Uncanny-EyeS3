@@ -71,6 +71,14 @@ bool SDConfig::load(DeviceConfig &cfg, int csPin, int sckPin, int misoPin, int m
     Serial.printf("[SDConfig] Start eye index: %d.\n", cfg.startEyeIndex);
   }
 
+  // --- display section ---
+  JsonObject disp = doc["display"];
+  if (!disp.isNull())
+  {
+    cfg.displayUpsideDown = disp["upsideDown"] | false;
+    Serial.printf("[SDConfig] Display upside-down: %s.\n", cfg.displayUpsideDown ? "true" : "false");
+  }
+
   // --- network section ---
   JsonObject net = doc["network"];
   if (!net.isNull())
@@ -117,11 +125,12 @@ bool SDConfig::load(DeviceConfig &cfg, int csPin, int sckPin, int misoPin, int m
 
 void SDConfig::applyDefaults(DeviceConfig &cfg)
 {
-  cfg.loaded          = false;
-  cfg.startEyeIndex   = 0;
-  cfg.networkChannel  = 1;
-  cfg.networkToken    = 0;
-  cfg.allowedMacCount = 0;
+  cfg.loaded            = false;
+  cfg.startEyeIndex     = 0;
+  cfg.networkChannel    = 1;
+  cfg.networkToken      = 0;
+  cfg.allowedMacCount   = 0;
+  cfg.displayUpsideDown = false;
   memset(cfg.networkPmk,   0, sizeof(cfg.networkPmk));
   memset(cfg.allowedMacs,  0, sizeof(cfg.allowedMacs));
 }

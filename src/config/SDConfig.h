@@ -12,6 +12,9 @@
  *   "eye": {
  *     "startIndex": 1
  *   },
+ *   "display": {
+ *     "upsideDown": false
+ *   },
  *   "network": {
  *     "channel": 1,
  *     "key": "SharedPassphrase",
@@ -53,6 +56,7 @@ struct DeviceConfig
   uint8_t  networkChannel;                               ///< ESP-NOW WiFi channel (1-13)
   uint8_t  allowedMacs[SD_CONFIG_MAX_ALLOWED_MACS][6];  ///< Sender MAC allowlist
   int      allowedMacCount;                              ///< Number of entries in allowedMacs (0 = allow all)
+  bool     displayUpsideDown;                            ///< Boot-time default: true = display mounted rotated 180°
 };
 
 /**
