@@ -83,6 +83,7 @@ private:
   int m_width = 480;
   int m_height = 480;
   bool m_initialized = false;
+  bool m_rotation180 = false;
 };
 
 #endif // TRGB_DISPLAY_H

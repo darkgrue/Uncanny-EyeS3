@@ -124,9 +124,10 @@ void TRGBDisplay::clear(uint16_t color)
   }
 }
 
-/** @brief Set display rotation (0-3). */
+/** @brief Set display rotation (0-3); also drives the directTransfer() flip for 180°. */
 void TRGBDisplay::setRotation(uint8_t rotation)
 {
+  m_rotation180 = (rotation == 2);
   if (gfx)
   {
     gfx->setRotation(rotation);
@@ -180,13 +181,6 @@ void TRGBDisplay::drawRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t 
   }
 }
 
-/**
- * @brief Direct bulk transfer to the PSRAM framebuffer.
- *
- * Copies row-by-row from the source buffer to the display's PSRAM framebuffer.
- * Assumes a 480-wide framebuffer pitch. This is the fastest bulk update path
- * for the RGB panel since writes are synchronous.
- */
 void TRGBDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
                                  int srcX, int srcY, int srcW, int srcH)
 {
@@ -201,11 +195,31 @@ void TRGBDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
 
   int fbWidth = gfx->width();
 
+  if (!m_rotation180)
+  {
+    for (int row = 0; row < srcH; row++)
+    {
+      uint16_t *srcRow = buffer + (srcY + row) * fbWidth + srcX;
+      uint16_t *dstRow = fb + (destY + row) * fbWidth + destX;
+      memcpy(dstRow, srcRow, srcW * sizeof(uint16_t));
+    }
+    return;
+  }
+
+  // 180° mount compensation: the destination position is mirrored through the
+  // center of the *whole* physical panel (m_width x m_height), not just the
+  // sub-rect being transferred, since the orientation is a property of how the
+  // panel itself is mounted.
   for (int row = 0; row < srcH; row++)
   {
     uint16_t *srcRow = buffer + (srcY + row) * fbWidth + srcX;
-    uint16_t *dstRow = fb + (destY + row) * fbWidth + destX;
-    memcpy(dstRow, srcRow, srcW * sizeof(uint16_t));
+    int dstRowIdx = (m_height - 1) - (destY + row);
+    uint16_t *dstRow = fb + dstRowIdx * fbWidth;
+    for (int col = 0; col < srcW; col++)
+    {
+      int dstColIdx = (m_width - 1) - (destX + col);
+      dstRow[dstColIdx] = srcRow[col];
+    }
   }
 }
 
