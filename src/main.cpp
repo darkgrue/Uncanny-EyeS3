@@ -478,6 +478,11 @@ void setup()
 
   setupDisplay();
 
+  if (s_display)
+  {
+    s_display->setRotation(s_deviceConfig.displayUpsideDown ? 2 : 0);
+  }
+
   setupNetwork();
 
   int startEye = s_deviceConfig.startEyeIndex;
@@ -687,6 +692,15 @@ void loop()
       else
       {
         Serial.printf("Invalid eye index. Available: 0-%d\n", s_eyeCount - 1);
+      }
+    }
+    else if (c == 'U')
+    {
+      int flag = Serial.parseInt();
+      if (s_display)
+      {
+        s_display->setRotation(flag ? 2 : 0);
+        Serial.printf("Display %s.\n", flag ? "upside-down" : "normal");
       }
     }
   }
