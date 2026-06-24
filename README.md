@@ -158,7 +158,6 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
     },
     "iris": {
         "maxFraction": 0.5,
-        "minFraction": 0.3,
         "color": 65281,
         "angle": 0,
         "spin": 0,
@@ -190,9 +189,9 @@ All size values are fractions (0.0–1.0) of the display's smaller dimension, so
 | `radiusFraction`                    | Eye radius as fraction of the smaller screen dimension                             |
 | `backColor`                         | Background color behind the eye (RGB565)                                           |
 | `pupil.slitRadius`                  | `0.0` = round; fraction of iris radius for slit vertical half-height (e.g. `0.75`) |
-| `pupil.minFraction` / `maxFraction` | Pupil size range as fraction of iris radius                                        |
+| `pupil.minFraction`                 | Pupil radius at full constriction, as fraction of iris radius (brightest light)    |
+| `pupil.maxFraction`                 | Pupil radius at full dilation, as fraction of iris radius (darkest light)          |
 | `iris.maxFraction`                  | Iris radius as fraction of eye radius                                              |
-| `iris.minFraction`                  | Minimum pupil size as fraction of iris radius (light sensor minimum constriction) |
 | `iris.spin` / `iSpin`               | Continuous spin / fixed per-frame spin override                                    |
 | `iris.filename`                     | Optional PNG/BMP texture (relative path, auto-converted to RGB565)                 |
 | `sclera.filename`                   | Optional sclera texture                                                            |
@@ -244,6 +243,31 @@ E5    → switch to eye index 5 (leopard)
 ```
 
 The command is parsed in `loop()` and calls `EyeAnimator::setEyeIndex()`, which reinitializes the renderer with the new eye definition.
+
+---
+
+## Display Orientation _(planned)_
+
+> **Status:** design spec only — not yet implemented. See
+> [`docs/superpowers/specs/2026-06-24-upside-down-mounting-design.md`](docs/superpowers/specs/2026-06-24-upside-down-mounting-design.md).
+
+For builds where the display is physically mounted rotated 180°, an `U<0|1>` serial
+command will flip the image (`U1` = upside-down, `U0` = normal), taking effect
+immediately. A boot-time default will be configurable via a new `display` section in
+`/eyes_config.json`:
+
+```json
+{
+  "display": {
+    "upsideDown": false
+  }
+}
+```
+
+On the AMOLED board this is a single display-controller register write (the panel
+itself flips the scan-out), so it costs nothing per frame. On the T-RGB board the
+flip is applied during the existing per-row buffer copy, adding only a per-row pixel
+reversal rather than any change to the render loop itself.
 
 ---
 

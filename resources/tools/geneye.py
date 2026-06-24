@@ -260,7 +260,6 @@ def _build_eye_definition_lines(
     pupil_max = pupil.get('maxFraction', 1.67)
 
     iris_max = iris.get('maxFraction', 0.5)
-    iris_min = iris.get('minFraction', 0.3)
     iris_color = iris.get('color', 0x001F)
     iris_angle = iris.get('angle', 0)
     iris_spin = iris.get('spin', 0)
@@ -285,7 +284,7 @@ def _build_eye_definition_lines(
         f' {squint}, nullptr,',
         f'      {{ {pupil_color}, {pupil_slit},'
         f' {pupil_min}, {pupil_max} }},',
-        f'      {{ {iris_max}, {iris_min}, {iris_tex},'
+        f'      {{ {iris_max}, {iris_tex},'
         f' {iris_color}, {iris_angle}, {iris_spin}, 0, 0 }},',
         f'      {{ {sclera_tex}, {sclera_color},'
         f' {sclera_angle}, {sclera_spin}, 0, 0 }},',

@@ -7,10 +7,10 @@
         "color": 0,
         "slitRadius": 0,
         "minFraction": 0.35,
-        "maxFraction": 0.8
+        "maxFraction": 0.7
     },
     "iris": {
-        "maxFraction": 0.5,
+        "maxFraction": 0.98,
         "filename": "iris.png",
         "maxTexW": 256,
         "maxTexH": 83,
@@ -20,10 +20,9 @@
         "mirror": false
     },
     "sclera": {
-        "filename": "sclera.png",
         "maxTexW": 128,
         "maxTexH": 64,
-        "color": 65535,
+        "color": 0,
         "angle": 0,
         "spin": 0,
         "mirror": false

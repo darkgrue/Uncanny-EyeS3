@@ -41,7 +41,6 @@ struct PupilConfig
 struct IrisConfig
 {
   float maxFraction; // iris radius as fraction of eye radius
-  float minFraction; // min pupil size as fraction of iris radius
   struct
   {
     const uint16_t *data; // pointer to texture data

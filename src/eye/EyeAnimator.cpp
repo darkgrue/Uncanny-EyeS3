@@ -31,7 +31,7 @@ bool EyeAnimator::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
   m_normalClosure = eyeDef.eyelid.normalClosure;
   m_wideClosure = eyeDef.eyelid.wideClosure;
 
-  setPupilRange(eyeDef.iris.minFraction, eyeDef.pupil.maxFraction);
+  setPupilRange(eyeDef.pupil.minFraction, eyeDef.pupil.maxFraction);
   m_irisCenter = 0.5f;
 
   m_blink.setNormalGap(m_normalClosure);
@@ -131,7 +131,7 @@ void EyeAnimator::update(uint32_t now)
     m_eyeIndex = pending;
     m_eyeDef = s_eyeRegistry[pending];
     m_renderer.begin(m_display, *m_eyeDef);
-    setPupilRange(m_eyeDef->iris.minFraction, m_eyeDef->pupil.maxFraction);
+    setPupilRange(m_eyeDef->pupil.minFraction, m_eyeDef->pupil.maxFraction);
     m_normalClosure = m_eyeDef->eyelid.normalClosure;
     m_wideClosure = m_eyeDef->eyelid.wideClosure;
     m_blink.setNormalGap(m_normalClosure);
