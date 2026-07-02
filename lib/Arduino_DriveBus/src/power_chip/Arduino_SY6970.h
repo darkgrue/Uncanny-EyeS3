@@ -51,6 +51,8 @@
  *          POWER_CHARGING_FAULT_STATUS, // 充电故障状态
  *          POWER_BATTERY_FAULT_STATUS,  // 电池故障状态
  *          POWER_NTC_FAULT_STATUS,      // NTC故障状态
+ *
+ *          POWER_BATFET_STATUS, // 电池开关（BATFET）状态
  *      };
  *
  *      enum Value_Information
@@ -112,20 +114,20 @@
 static const uint8_t SY6970_Initialization_BufferOperations[] = {
 
     BO_BEGIN_TRANSMISSION,
-    BO_WRITE_C8_D8, SY6970_RD_WR_DEVICE_00, 0B00001000, // 关闭 ILIM引脚
+    BO_WRITE_C8_D8, SY6970_RD_WR_DEVICE_00, 0B00001000, // Disable the ILIM pin
     BO_END_TRANSMISSION,
 
     BO_BEGIN_TRANSMISSION,
-    BO_WRITE_C8_D8, SY6970_RD_WR_DEVICE_02, 0B11011101, // 开启ADC测量功能
+    BO_WRITE_C8_D8, SY6970_RD_WR_DEVICE_02, 0B11011101, // Enable ADC measurement function
     BO_END_TRANSMISSION,
     BO_DELAY, 10,
 
     BO_BEGIN_TRANSMISSION,
-    BO_WRITE_C8_D8, SY6970_RD_WR_DEVICE_07, 0B10001101, // 禁用看门狗定时喂狗功能
+    BO_WRITE_C8_D8, SY6970_RD_WR_DEVICE_07, 0B10001101, // Disable the watchdog timer's periodic feeding function
     BO_END_TRANSMISSION,
 
     // BO_BEGIN_TRANSMISSION,
-    // BO_WRITE_C8_D8, SY6970_RD_WR_DEVICE_09, 0B01100100, // 在无需使用电池的情况下关闭 BATFET
+    // BO_WRITE_C8_D8, SY6970_RD_WR_DEVICE_09, 0B01100100, // Turn off the BATFET when battery operation is not required
     // BO_END_TRANSMISSION,
 
     BO_DELAY, 100};
@@ -133,16 +135,16 @@ static const uint8_t SY6970_Initialization_BufferOperations[] = {
 class Arduino_SY6970 : public Arduino_IIC
 {
 public:
-    Arduino_SY6970(std::shared_ptr<Arduino_IIC_DriveBus> bus, uint8_t device_address,
-                   int8_t rst = DRIVEBUS_DEFAULT_VALUE, int8_t iqr = DRIVEBUS_DEFAULT_VALUE);
+  Arduino_SY6970(std::shared_ptr<Arduino_IIC_DriveBus> bus, uint8_t device_address,
+                 int8_t rst = DRIVEBUS_DEFAULT_VALUE, int8_t iqr = DRIVEBUS_DEFAULT_VALUE);
 
-    bool begin(int32_t speed = DRIVEBUS_DEFAULT_VALUE) override;
-    int32_t IIC_Device_ID(void) override;
-    bool IIC_Write_Device_State(uint32_t device, uint8_t state) override;
-    bool IIC_Write_Device_Value(uint32_t device, int64_t value) override;
-    String IIC_Read_Device_State(uint32_t information) override;
-    double IIC_Read_Device_Value(uint32_t information) override;
+  bool begin(int32_t speed = DRIVEBUS_DEFAULT_VALUE) override;
+  int32_t IIC_Device_ID(void) override;
+  bool IIC_Write_Device_State(uint32_t device, uint8_t state) override;
+  bool IIC_Write_Device_Value(uint32_t device, int64_t value) override;
+  String IIC_Read_Device_State(uint32_t information) override;
+  double IIC_Read_Device_Value(uint32_t information) override;
 
 protected:
-    bool IIC_Initialization(void) override;
+  bool IIC_Initialization(void) override;
 };

@@ -210,6 +210,8 @@ void setupSY6970()
     Serial.println("ERROR: SY6970 failed to initialize!");
   }
 
+  SY6970->IIC_Write_Device_State(SY6970->Arduino_IIC_Power::Device::POWER_BATFET_MODE, SY6970->Arduino_IIC_Power::Device_State::POWER_DEVICE_OFF);
+  /*
   // Enable ADC measurement function.
   SY6970->IIC_Write_Device_State(SY6970->Arduino_IIC_Power::Device::POWER_DEVICE_ADC_MEASURE, SY6970->Arduino_IIC_Power::Device_State::POWER_DEVICE_ON);
   // Disable watchdog timer feeding function.
@@ -232,6 +234,7 @@ void setupSY6970()
   SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_TERMINATION_CHARGING_CURRENT_LIMIT, 320);
   // Set OTG current limit to 500mA.
   SY6970->IIC_Write_Device_Value(SY6970->Arduino_IIC_Power::Device_Value::POWER_DEVICE_OTG_CHARGING_LIMIT, 500);
+  */
 
 #if defined(SY6970_DIAGNOSTIC_ENABLED)
   Serial.printf("\n--------------------SY6970--------------------\n");
@@ -242,6 +245,8 @@ void setupSY6970()
                 (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_BUS_STATUS)).c_str());
   Serial.printf("BUS Connection Status: %s\n",
                 (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_BUS_CONNECTION_STATUS)).c_str());
+  Serial.printf("Battery FET Status: %s\n",
+                (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_BATFET_STATUS)).c_str());
   Serial.printf("Charging Status: %s\n",
                 (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_CHARGING_STATUS)).c_str());
   Serial.printf("Input Source Status: %s\n",
@@ -252,7 +257,6 @@ void setupSY6970()
                 (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_SYSTEM_VOLTAGE_STATUS)).c_str());
   Serial.printf("Thermal Regulation Status: %s\n",
                 (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_THERMAL_REGULATION_STATUS)).c_str());
-
   Serial.printf("\nWatchdog Fault Status: %s\n",
                 (SY6970->IIC_Read_Device_State(SY6970->Arduino_IIC_Power::Status_Information::POWER_WATCHDOG_FAULT_STATUS)).c_str());
   Serial.printf("OTG Fault Status: %s\n",

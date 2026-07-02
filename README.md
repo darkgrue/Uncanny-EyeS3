@@ -246,15 +246,22 @@ The command is parsed in `loop()` and calls `EyeAnimator::setEyeIndex()`, which 
 
 ---
 
-## Display Orientation _(planned)_
+## Display Orientation
 
-> **Status:** design spec only — not yet implemented. See
-> [`docs/superpowers/specs/2026-06-24-upside-down-mounting-design.md`](docs/superpowers/specs/2026-06-24-upside-down-mounting-design.md).
+For builds where the display is physically mounted rotated 180°, send a command over
+serial to flip the image. The change applies immediately and lasts for the current
+power cycle only — it is never written back to the SD card.
 
-For builds where the display is physically mounted rotated 180°, an `U<0|1>` serial
-command will flip the image (`U1` = upside-down, `U0` = normal), taking effect
-immediately. A boot-time default will be configurable via a new `display` section in
-`/eyes_config.json`:
+```text
+U0    → normal orientation
+U1    → upside-down (180° flip)
+```
+
+If no display is initialized, the command prints `Display not available.` and has
+no effect.
+
+A boot-time default can be set via the `display` section in `/eyes_config.json` —
+see [SD Card Configuration](#sd-card-configuration):
 
 ```json
 {
@@ -266,8 +273,9 @@ immediately. A boot-time default will be configurable via a new `display` sectio
 
 On the AMOLED board this is a single display-controller register write (the panel
 itself flips the scan-out), so it costs nothing per frame. On the T-RGB board the
-flip is applied during the existing per-row buffer copy, adding only a per-row pixel
-reversal rather than any change to the render loop itself.
+flip is applied during the existing per-row buffer copy in `directTransfer()`,
+adding only a per-row pixel reversal rather than any change to the render loop
+itself.
 
 ---
 
@@ -356,6 +364,9 @@ Place `/eyes_config.json` in the root directory of the card:
   "eye": {
     "startIndex": 1
   },
+  "display": {
+    "upsideDown": false
+  },
   "network": {
     "channel": 1,
     "key": "SharedPassphrase",
@@ -370,6 +381,7 @@ Place `/eyes_config.json` in the root directory of the card:
 | Field                  | Type   | Default  | Description                                                             |
 | ---------------------- | ------ | -------- | ----------------------------------------------------------------------- |
 | `eye.startIndex`       | int    | `0`      | Eye index to load at startup; see Runtime Eye Switching for names       |
+| `display.upsideDown`   | bool   | `false`  | Boot-time default for a 180-degree flip (see Display Orientation)       |
 | `network.channel`      | int    | `1`      | ESP-NOW WiFi channel (1–13); must match across all synchronized devices |
 | `network.key`          | string | _(none)_ | Shared passphrase or 32-hex-digit key; omit to disable authentication   |
 | `network.allowed_macs` | array  | _(none)_ | MAC allowlist; omit to accept any device with the correct key           |
