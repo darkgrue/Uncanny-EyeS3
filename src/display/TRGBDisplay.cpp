@@ -12,6 +12,12 @@
 #include <databus/Arduino_ESP32RGBPanel.h>
 #include <display/Arduino_RGB_Display.h>
 
+// Same ROM function Arduino_RGB_Display's own draw calls use to flush the CPU
+// data cache back to PSRAM after writing pixels. The DPI panel's DMA reads the
+// framebuffer directly from PSRAM, bypassing the cache, so writes that skip
+// this call can stay invisible to the panel indefinitely.
+extern "C" int Cache_WriteBack_Addr(uint32_t addr, uint32_t size);
+
 namespace
 {
   constexpr int GFX_BL = 46;
@@ -21,6 +27,11 @@ namespace
   constexpr int GFX_CS = 3;
   constexpr int GFX_SCK = 5;
   constexpr int GFX_MOSI = 4;
+
+  // Backlight PWM: 5kHz is above the flicker/audible range; 8-bit resolution
+  // matches setBrightness()'s uint8_t range.
+  constexpr uint32_t BL_PWM_FREQ = 5000;
+  constexpr uint8_t BL_PWM_RESOLUTION = 8;
 }
 
 TRGBDisplay::TRGBDisplay()
@@ -46,6 +57,15 @@ bool TRGBDisplay::begin()
 
   bus = new Arduino_XL9535SWSPI(GFX_SDA, GFX_SCL, GFX_PWD, GFX_CS, GFX_SCK, GFX_MOSI);
 
+  // Pin group order matches Arduino_ESP32RGBPanel's non-bigEndian data_gpio_nums
+  // assembly ([b-args, g-args, r-args]) against LilyGo's confirmed-working raw
+  // array in LilyGo_RGBPanel.cpp ([DATA13-17, DATA6-11, DATA1-5]) — the "r"/"b"
+  // argument names denote array position, not which pins are physically wired
+  // to red/blue on the panel.
+  // prefer_speed pinned to 8MHz per LilyGo's official RGB_MAX_PIXEL_CLOCK_HZ
+  // (LilyGo_RGBPanel.cpp) — Arduino_GFX's own auto-selection picks 12MHz
+  // whenever CONFIG_SPIRAM_MODE_QUAD isn't defined (true here: this board
+  // uses octal PSRAM).
   rgbpanel = new Arduino_ESP32RGBPanel(
       45, 41, 47, 42,
       21, 18, 17, 16, 15,
@@ -53,7 +73,7 @@ bool TRGBDisplay::begin()
       7, 6, 5, 3, 2,
       1, 50, 1, 30,
       1, 20, 1, 30,
-      1);
+      1, 8000000);
 
   gfx = new Arduino_RGB_Display(
       480, 480, rgbpanel, 0, true,
@@ -66,8 +86,8 @@ bool TRGBDisplay::begin()
   }
 
   gfx->fillScreen(0x0000);
-  pinMode(GFX_BL, OUTPUT);
-  digitalWrite(GFX_BL, HIGH);
+  ledcAttach(GFX_BL, BL_PWM_FREQ, BL_PWM_RESOLUTION);
+  ledcWrite(GFX_BL, m_brightness);
   m_initialized = true;
 
   return true;
@@ -134,16 +154,17 @@ void TRGBDisplay::setRotation(uint8_t rotation)
   }
 }
 
-/** @brief Set backlight on/off. */
+/** @brief Set backlight on/off, preserving the last brightness level for on. */
 void TRGBDisplay::setBacklight(bool on)
 {
-  digitalWrite(GFX_BL, on ? HIGH : LOW);
+  ledcWrite(GFX_BL, on ? m_brightness : 0);
 }
 
-/** @brief Set brightness (stubbed — not adjustable on T-RGB). */
+/** @brief Set backlight brightness via PWM (0-255). */
 void TRGBDisplay::setBrightness(uint8_t level)
 {
-  (void)level;
+  m_brightness = level;
+  ledcWrite(GFX_BL, level);
 }
 
 /** @brief Begin a bus transaction (no-op for DPI). */
@@ -214,6 +235,7 @@ void TRGBDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
       uint16_t *srcRow = buffer + (srcY + row) * fbWidth + srcX;
       uint16_t *dstRow = fb + (destY + row) * fbWidth + destX;
       memcpy(dstRow, srcRow, srcW * sizeof(uint16_t));
+      Cache_WriteBack_Addr((uint32_t)dstRow, srcW * sizeof(uint16_t));
     }
     return;
   }
@@ -227,11 +249,12 @@ void TRGBDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
     uint16_t *srcRow = buffer + (srcY + row) * fbWidth + srcX;
     int dstRowIdx = (m_height - 1) - (destY + row);
     uint16_t *dstRow = fb + dstRowIdx * fbWidth;
+    int dstColIdx = (m_width - 1) - (destX + srcW - 1);
     for (int col = 0; col < srcW; col++)
     {
-      int dstColIdx = (m_width - 1) - (destX + col);
-      dstRow[dstColIdx] = srcRow[col];
+      dstRow[(m_width - 1) - (destX + col)] = srcRow[col];
     }
+    Cache_WriteBack_Addr((uint32_t)(dstRow + dstColIdx), srcW * sizeof(uint16_t));
   }
 }
 

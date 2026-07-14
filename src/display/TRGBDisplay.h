@@ -84,6 +84,7 @@ private:
   int m_height = 480;
   bool m_initialized = false;
   bool m_rotation180 = false;
+  uint8_t m_brightness = 255; // Last brightness level set via setBrightness()
 };
 
 #endif // TRGB_DISPLAY_H
