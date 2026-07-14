@@ -49,8 +49,13 @@
 #define QWIIC_SDA 43
 #define QWIIC_SCL 44
 #elif defined(ARDUINO_LILYGO_T_RGB)
-#define IIC_SDA 48
-#define IIC_SCL 8
+// SDA/SCL per LilyGo's official utilities.h (BOARD_I2C_SDA/BOARD_I2C_SCL) —
+// previously swapped here, which left most I2C devices (SY6970, the XL9555
+// GPIO expander driving the ST7701S panel's command lines) unable to
+// communicate, while the display panel itself never received its init
+// sequence and stayed permanently blank.
+#define IIC_SDA 8
+#define IIC_SCL 48
 #define QWIIC_SDA 43
 #define QWIIC_SCL 44
 #else
