@@ -131,7 +131,7 @@ void setupDisplay()
   s_display = &display;
   s_config.displayWidth = display.getWidth();
   s_config.displayHeight = display.getHeight();
-#elif IS_TRGB
+#elif ARDUINO_LILYGO_T_RGB
   static TRGBDisplay display;
   if (!display.begin())
   {
