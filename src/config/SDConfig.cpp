@@ -18,17 +18,23 @@
  * @brief Mount SD, read /eyes_config.json, unmount.
  *
  * SPI is initialised on the board's dedicated SD pins (SD_SCLK/MISO/MOSI/CS
- * from BoardPins.h). The card is unmounted after reading so that other code
- * can freely use the SPI bus if needed. All log messages are prefixed with
- * "[SDConfig]" for easy filtering.
+ * from BoardPins.h) using a dedicated HSPI bus. This must stay off the
+ * default FSPI bus: on ESP32-S3, FSPI and the AMOLED's QSPI bus
+ * (ESP32QSPI_SPI_HOST) both map to the same physical SPI2 peripheral, and
+ * sharing it between Arduino's SPIClass and the ESP-IDF spi_master driver
+ * used by the display corrupts the latter's internal host state, causing a
+ * `spi_device_polling_end` assert during later display transfers. The card
+ * is unmounted after reading so the SD SPI bus is fully idle afterward. All
+ * log messages are prefixed with "[SDConfig]" for easy filtering.
  */
 bool SDConfig::load(DeviceConfig &cfg, int csPin, int sckPin, int misoPin, int mosiPin)
 {
   applyDefaults(cfg);
 
-  SPI.begin(sckPin, misoPin, mosiPin, csPin);
+  static SPIClass sdSPI(HSPI);
+  sdSPI.begin(sckPin, misoPin, mosiPin, csPin);
 
-  if (!SD.begin(csPin))
+  if (!SD.begin(csPin, sdSPI))
   {
     Serial.println("[SDConfig] No SD card detected — using defaults.");
     return false;
