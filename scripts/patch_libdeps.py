@@ -191,6 +191,33 @@ def apply_hunk(content_lines, hunk):
     )
 
 
+def is_patch_applied(file_patches, libdeps_dir):
+    """
+    Returns True only if every hunk's replacement text is actually present
+    in its target file right now.
+
+    A sentinel alone isn't proof: PlatformIO can refetch/reset a library's
+    subfolder (e.g. during dependency resolution or `pio pkg update`)
+    without touching sibling sentinel files in libdeps_dir, which silently
+    reverts the target file while the sentinel keeps claiming it's patched.
+    This re-derives ground truth from the file contents on every build.
+    """
+    for fp in file_patches:
+        target = os.path.normpath(os.path.join(libdeps_dir, fp["filename"]))
+        if not os.path.isfile(target):
+            return False
+        with open(target, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+        for hunk in fp["hunks"]:
+            new = hunk["new_lines"]
+            if not new:
+                continue  # pure deletion hunk — nothing to verify as "present"
+            hint = hunk["new_start"] - 1
+            if find_block(lines, hint, new) is None:
+                return False
+    return True
+
+
 def apply_patch_to_file(target_path, file_patch):
     """
     Apply all hunks for one file entry from a parsed patch.
@@ -233,18 +260,21 @@ def apply_patch_file(patch_path, libdeps_dir):
     with open(patch_path, "r", encoding="utf-8", errors="replace") as f:
         patch_text = f.read()
 
-    sentinel = sentinel_path(patch_path, libdeps_dir, patch_text)
-    if os.path.exists(sentinel):
-        print(f"  [SKIP]  Already applied: {os.path.basename(patch_path)}")
-        return True
-
-    print(f"  [APPLY] {os.path.basename(patch_path)}")
-
     file_patches = parse_patch(patch_text)
 
     if not file_patches:
         print(f"  [WARN]  No file hunks parsed from: {patch_path}")
         return False
+
+    sentinel = sentinel_path(patch_path, libdeps_dir, patch_text)
+    if os.path.exists(sentinel):
+        if is_patch_applied(file_patches, libdeps_dir):
+            print(f"  [SKIP]  Already applied: {os.path.basename(patch_path)}")
+            return True
+        print(f"  [STALE] Sentinel present but target reverted, re-applying: {os.path.basename(patch_path)}")
+        os.remove(sentinel)
+
+    print(f"  [APPLY] {os.path.basename(patch_path)}")
 
     all_ok = True
     for fp in file_patches:
