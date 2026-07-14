@@ -137,8 +137,9 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
   }
   m_mapRadius = eyeDef.polarMap.radius;
   m_mapDiameter = m_mapRadius * 2;
+  m_needsByteSwap = display->needsByteSwappedPixels();
 
-  m_eyelidRenderer.begin(m_displaySize, eyeRadiusPixels(eyeDef), eyeDef.eyelid);
+  m_eyelidRenderer.begin(m_displaySize, eyeRadiusPixels(eyeDef), eyeDef.eyelid, m_needsByteSwap);
   m_eyelidRenderer.setTrackingEnabled(eyeDef.eyelid.tracking);
 
   size_t bufSize = m_displaySize * m_displaySize * sizeof(uint16_t);
@@ -325,9 +326,12 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
     if (m_irisTexCache)
     {
       memcpy(m_irisTexCache, eyeDef.iris.texture.data, sz);
-      size_t count = sz / sizeof(uint16_t);
-      for (size_t i = 0; i < count; i++)
-        m_irisTexCache[i] = __builtin_bswap16(m_irisTexCache[i]);
+      if (m_needsByteSwap)
+      {
+        size_t count = sz / sizeof(uint16_t);
+        for (size_t i = 0; i < count; i++)
+          m_irisTexCache[i] = __builtin_bswap16(m_irisTexCache[i]);
+      }
       Serial.printf("[EyeRenderer] Iris texture cached in %s: %zu bytes\n", irisLoc, sz);
     }
     else
@@ -347,9 +351,12 @@ bool EyeRenderer::begin(DisplayHAL *display, const EyeDefinition &eyeDef)
     if (m_scleraTexCache)
     {
       memcpy(m_scleraTexCache, eyeDef.sclera.texture.data, sz);
-      size_t count = sz / sizeof(uint16_t);
-      for (size_t i = 0; i < count; i++)
-        m_scleraTexCache[i] = __builtin_bswap16(m_scleraTexCache[i]);
+      if (m_needsByteSwap)
+      {
+        size_t count = sz / sizeof(uint16_t);
+        for (size_t i = 0; i < count; i++)
+          m_scleraTexCache[i] = __builtin_bswap16(m_scleraTexCache[i]);
+      }
       Serial.printf("[EyeRenderer] Sclera texture cached in %s: %zu bytes\n", scleraLoc, sz);
     }
     else
@@ -559,11 +566,12 @@ void IRAM_ATTR EyeRenderer::renderFrame(float eyeX, float eyeY, float pupilFacto
 
   // Pre-swap all solid colors to big-endian so the frame buffer is ready for
   // directTransfer → writeBytes, which sends raw bytes directly to the display
-  // via PSRAM DMA without a DRAM copy.
-  const uint16_t bgColorBE = __builtin_bswap16(bgColor);
-  const uint16_t pupilColorBE = __builtin_bswap16(eye.pupil.color);
-  const uint16_t irisColorBE = __builtin_bswap16(eye.iris.color);
-  const uint16_t scleraColorBE = __builtin_bswap16(eye.sclera.color);
+  // via PSRAM DMA without a DRAM copy. Only needed on displays whose
+  // directTransfer() consumes a raw big-endian byte stream (see m_needsByteSwap).
+  const uint16_t bgColorBE = m_needsByteSwap ? __builtin_bswap16(bgColor) : bgColor;
+  const uint16_t pupilColorBE = m_needsByteSwap ? __builtin_bswap16(eye.pupil.color) : eye.pupil.color;
+  const uint16_t irisColorBE = m_needsByteSwap ? __builtin_bswap16(eye.iris.color) : eye.iris.color;
+  const uint16_t scleraColorBE = m_needsByteSwap ? __builtin_bswap16(eye.sclera.color) : eye.sclera.color;
 
   float eyelidGap = 1.0f - blinkFactor;
 

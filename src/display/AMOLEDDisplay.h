@@ -74,6 +74,9 @@ public:
   void directTransfer(uint16_t *buffer, int destX, int destY,
                       int srcX, int srcY, int srcW, int srcH) override;
 
+  /** @brief directTransfer() sends raw bytes over QSPI — needs big-endian pixels. */
+  bool needsByteSwappedPixels() const override { return true; }
+
 private:
   Arduino_CO5300 *m_gfx = nullptr;
   Arduino_ESP32QSPI *m_qspiBus = nullptr;

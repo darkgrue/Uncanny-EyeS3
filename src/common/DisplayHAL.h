@@ -120,6 +120,16 @@ public:
     // --- Direct bulk transfer ---
 
     /**
+     * @brief True if directTransfer() writes raw bytes to a big-endian bus.
+     *
+     * QSPI/SPI panels (e.g. AMOLED/CO5300) send directTransfer's buffer as a
+     * raw byte stream, so pixel data must be pre-swapped to big-endian.
+     * Panels that copy into their own native-endian framebuffer (e.g.
+     * T-RGB's DPI panel) must return false — swapping would corrupt colors.
+     */
+    virtual bool needsByteSwappedPixels() const { return false; }
+
+    /**
      * @brief Direct buffer transfer bypassing the GFX library.
      *
      * Achieves maximum throughput by copying directly from a PSRAM buffer

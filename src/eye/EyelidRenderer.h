@@ -32,8 +32,10 @@ public:
    * @param displaySize Display width/height in pixels.
    * @param eyeRadius Radius of the eye circle in pixels.
    * @param config Eyelid geometry and color configuration.
+   * @param needsByteSwap True if the frame buffer requires big-endian pixels
+   *   (see DisplayHAL::needsByteSwappedPixels()).
    */
-  void begin(int displaySize, uint16_t eyeRadius, const EyelidConfig &config);
+  void begin(int displaySize, uint16_t eyeRadius, const EyelidConfig &config, bool needsByteSwap = false);
 
   /** @brief Enable/disable eyelid tracking of pupil position. */
   void setTrackingEnabled(bool enabled) { m_trackingEnabled = enabled; }
@@ -81,6 +83,7 @@ private:
 
   bool m_hasCustomEyelids = false; // True if eye has custom eyelid data
   bool m_trackingEnabled = true;   // Enable pupil tracking
+  bool m_needsByteSwap = false;    // True if frame buffer pixels must be big-endian
 
   float m_smoothedUpperFactor = 1.0f; // Smoothed upper eyelid factor
   float m_smoothedLowerFactor = 1.0f; // Smoothed lower eyelid factor

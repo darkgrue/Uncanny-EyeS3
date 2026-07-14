@@ -97,6 +97,7 @@ private:
   EyelidRenderer m_eyelidRenderer; // Manages eyelid rendering
 
   bool m_hasCustomLids = false; // Cached: true when eyelid tables have non-trivial data
+  bool m_needsByteSwap = false; // Cached: true when m_display->directTransfer() needs big-endian pixels
 
   // DRAM caches for lookup tables — eliminates flash and PSRAM latency in the hot render loop.
   uint16_t *m_irisTexCache = nullptr;   // DRAM copy of iris texture

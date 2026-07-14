@@ -25,12 +25,14 @@ EyelidRenderer::EyelidRenderer()
  * @param displaySize Display width/height in pixels.
  * @param eyeRadius Eye circle radius in pixels.
  * @param config Eyelid geometry and color configuration.
+ * @param needsByteSwap True if the frame buffer requires big-endian pixels.
  */
-void EyelidRenderer::begin(int displaySize, uint16_t eyeRadius, const EyelidConfig &config)
+void EyelidRenderer::begin(int displaySize, uint16_t eyeRadius, const EyelidConfig &config, bool needsByteSwap)
 {
   m_displaySize = displaySize;
   m_eyeRadius = eyeRadius;
   m_config = &config;
+  m_needsByteSwap = needsByteSwap;
 
   m_eyelidColor = config.color;
 
@@ -133,6 +135,7 @@ void EyelidRenderer::render(float eyeX, float eyeY, float eyelidGap, uint16_t *f
 void EyelidRenderer::renderDefaultEyelids(int centerX, int centerY, float upperY, float lowerY,
                                           uint16_t *buffer, int size, uint16_t color)
 {
+  const uint16_t colorOut = m_needsByteSwap ? __builtin_bswap16(color) : color;
   // upperY/lowerY are normalized display positions (0.0=top, 1.0=bottom).
   // Convert to absolute pixel rows; use inclusive bounds so the boundary row
   // is always painted and upperYPos==lowerYPos (full closure) leaves no gap.
@@ -172,7 +175,7 @@ void EyelidRenderer::renderDefaultEyelids(int centerX, int centerY, float upperY
       int dx = x - centerX;
       if (dx * dx + dySq > eyeRadiusSq)
         continue;
-      buffer[y * size + x] = __builtin_bswap16(color);
+      buffer[y * size + x] = colorOut;
     }
   }
 }
@@ -249,7 +252,7 @@ void EyelidRenderer::renderCustomEyelids(float eyelidGap, int centerX, int cente
         {
           int yTop = (circleTop < 0) ? 0 : circleTop;
           int yBot = (upperEdge > size) ? size : upperEdge;
-          uint16_t colorBE = __builtin_bswap16(color);
+          uint16_t colorBE = m_needsByteSwap ? __builtin_bswap16(color) : color;
           for (int y = yTop; y < yBot; y++)
             buffer[y * size + x] = colorBE;
 #if defined(FDEBUG)
@@ -273,7 +276,7 @@ void EyelidRenderer::renderCustomEyelids(float eyelidGap, int centerX, int cente
         {
           int yTop = (lowerEdge < 0) ? 0 : lowerEdge;
           int yBot = (circleBottom > size) ? size : circleBottom;
-          uint16_t colorBE = __builtin_bswap16(color);
+          uint16_t colorBE = m_needsByteSwap ? __builtin_bswap16(color) : color;
           for (int y = yTop; y < yBot; y++)
             buffer[y * size + x] = colorBE;
 #if defined(FDEBUG)
