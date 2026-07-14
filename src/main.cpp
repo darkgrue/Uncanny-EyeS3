@@ -164,6 +164,7 @@ void setupPCF85063()
   else
   {
     Serial.println("ERROR: PCF85063 failed to initialize!");
+    return;
   }
 
   // Enable RTC.
@@ -208,6 +209,7 @@ void setupSY6970()
   else
   {
     Serial.println("ERROR: SY6970 failed to initialize!");
+    return;
   }
 
   SY6970->IIC_Write_Device_State(SY6970->Arduino_IIC_Power::Device::POWER_BATFET_MODE, SY6970->Arduino_IIC_Power::Device_State::POWER_DEVICE_OFF);
