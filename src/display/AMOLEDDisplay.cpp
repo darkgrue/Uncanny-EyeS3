@@ -20,6 +20,7 @@
 AMOLEDDisplay::AMOLEDDisplay()
     : m_gfx(nullptr), m_qspiBus(nullptr), m_initialized(false), m_transferPending(false)
 {
+  m_busMutex = xSemaphoreCreateMutex();
 }
 
 /**
@@ -244,13 +245,27 @@ void AMOLEDDisplay::clear(uint16_t color)
   }
 }
 
-/** @brief Set display rotation (0-3). */
+/**
+ * @brief Set display rotation (0 = normal, 2 = 180°).
+ *
+ * Writes MADCTL (0x36) directly rather than going through
+ * Arduino_CO5300::setRotation(): that library's own bit values
+ * (CO5300_MADCTL_X_AXIS_FLIP=0x02, Y_AXIS_FLIP=0x05, combined 0x07 for its
+ * "180°" case) do not flip this panel. The standard MIPI DCS MX|MY
+ * combination (0xC0) does, confirmed empirically on hardware.
+ */
 void AMOLEDDisplay::setRotation(uint8_t rotation)
 {
-  if (m_gfx)
-  {
-    m_gfx->setRotation(rotation);
-  }
+  if (!m_qspiBus)
+    return;
+
+  uint8_t madctl = (rotation == 2) ? 0xC0 : 0x00;
+
+  xSemaphoreTake(m_busMutex, portMAX_DELAY);
+  m_qspiBus->beginWrite();
+  m_qspiBus->writeC8D8(0x36, madctl);
+  m_qspiBus->endWrite();
+  xSemaphoreGive(m_busMutex);
 }
 
 /** @brief Set backlight state (active-low enable). */
@@ -328,6 +343,8 @@ void AMOLEDDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
   if (!m_qspiBus)
     return;
 
+  xSemaphoreTake(m_busMutex, portMAX_DELAY);
+
   m_gfx->startWrite();
   m_gfx->writeAddrWindow(destX, destY, srcW, srcH);
 
@@ -370,6 +387,7 @@ void AMOLEDDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
     if (!copyBuf)
     {
       m_gfx->endWrite();
+      xSemaphoreGive(m_busMutex);
       return;
     }
 
@@ -383,4 +401,5 @@ void AMOLEDDisplay::directTransfer(uint16_t *buffer, int destX, int destY,
   }
 
   m_gfx->endWrite();
+  xSemaphoreGive(m_busMutex);
 }

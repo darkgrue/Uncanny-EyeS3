@@ -12,6 +12,8 @@
 
 #include "common/DisplayHAL.h"
 #include <Arduino_GFX.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 // Forward declarations - full includes are in AMOLEDDisplay.cpp
 class Arduino_ESP32QSPI;
@@ -84,6 +86,18 @@ private:
   int m_height = 466;
   bool m_initialized = false;
   bool m_transferPending = false;
+
+  /**
+   * @brief Guards the QSPI bus against concurrent access.
+   *
+   * directTransfer() runs on the async xfer task (Core 0, ~120 Hz) while
+   * setRotation() can be called from the Arduino loop() on a serial command
+   * (also Core 0, lower priority). Without this, the two can interleave their
+   * beginWrite()/endWrite() sequences on the same bus handle, desyncing the
+   * ESP-IDF SPI driver's chip-select tracking and tripping its
+   * "host->cur_cs == handle->id" assertion.
+   */
+  SemaphoreHandle_t m_busMutex = nullptr;
 };
 
 #endif // AMOLED_DISPLAY_H
