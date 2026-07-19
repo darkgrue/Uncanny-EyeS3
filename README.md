@@ -9,15 +9,14 @@ This codebase is based on code and ideas from the following projects:
 &emsp;https://github.com/chrismiller/TeensyEyes  
 &emsp;https://github.com/MichaelMeissner/TeensyEyes/tree/meissner2  
 
-
 ---
 
 ## Supported Hardware
 
-| Board                      | Display                | Controller | Resolution |
-| -------------------------- | ---------------------- | ---------- | ---------- |
-| LilyGo T-Display S3 AMOLED | CO5300 (QSPI @ 80 MHz) | ESP32-S3   | 466×466    |
-| LilyGo T-RGB               | ST7701S (DPI)          | ESP32-S3   | 480×480    |
+| Board                                                                                                          | Display                | Controller | Resolution |
+| -------------------------------------------------------------------------------------------------------------- | ---------------------- | ---------- | ---------- |
+| [LilyGo T-Display S3 AMOLED](https://lilygo.cc/en-us/products/t-display-s3-amoled-1-64?variant=45002266345653) | CO5300 (QSPI @ 80 MHz) | ESP32-S3   | 466×466    |
+| [LilyGo T-RGB](https://lilygo.cc/en-us/products/t-rgb)                                                         | ST7701S (DPI)          | ESP32-S3   | 480×480    |
 
 **Optional peripherals:**
 
