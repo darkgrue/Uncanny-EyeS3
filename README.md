@@ -372,18 +372,26 @@ Place `/eyes_config.json` in the root directory of the card:
     "allowed_macs": [
       "AA:BB:CC:DD:EE:FF",
       "11:22:33:44:55:66"
-    ]
+    ],
+    "forceController": false
   }
 }
 ```
 
-| Field                  | Type   | Default  | Description                                                             |
-| ---------------------- | ------ | -------- | ----------------------------------------------------------------------- |
-| `eye.startIndex`       | int    | `0`      | Eye index to load at startup; see Runtime Eye Switching for names       |
-| `display.upsideDown`   | bool   | `false`  | Boot-time default for a 180-degree flip (see Display Orientation)       |
-| `network.channel`      | int    | `1`      | ESP-NOW WiFi channel (1–13); must match across all synchronized devices |
-| `network.key`          | string | _(none)_ | Shared passphrase or 32-hex-digit key; omit to disable authentication   |
-| `network.allowed_macs` | array  | _(none)_ | MAC allowlist; omit to accept any device with the correct key           |
+| Field                     | Type   | Default  | Description                                                                 |
+| ------------------------- | ------ | -------- | --------------------------------------------------------------------------- |
+| `eye.startIndex`          | int    | `0`      | Eye index to load at startup; see Runtime Eye Switching for names           |
+| `display.upsideDown`      | bool   | `false`  | Boot-time default for a 180-degree flip (see Display Orientation)           |
+| `network.channel`         | int    | `1`      | ESP-NOW WiFi channel (1–13); must match across all synchronized devices     |
+| `network.key`             | string | _(none)_ | Shared passphrase or 32-hex-digit key; omit to disable authentication       |
+| `network.allowed_macs`    | array  | _(none)_ | MAC allowlist; omit to accept any device with the correct key               |
+| `network.forceController` | bool   | `false`  | Broadcast as controller with no WiiChuck/gesture input attached (see below) |
+
+### Syncing Devices Without a WiiChuck
+
+Normally, a device only broadcasts its eye state over ESP-NOW if it has an active WiiChuck or gesture-tracking input attached — that device becomes the controller, and others follow. If none of your devices have such an input, they'll each run autonomous animation independently and never show any ESP-NOW peers.
+
+To sync two or more purely-autonomous devices, set `network.forceController: true` in the config on exactly **one** device in the group. That device broadcasts its (autonomous) state; the others should leave `forceController` unset (or `false`) so they follow it.
 
 ### Key Formats
 

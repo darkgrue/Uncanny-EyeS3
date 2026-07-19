@@ -520,6 +520,7 @@ void setup()
   {
     s_animator->setSyncManager(s_syncManager);
   }
+  s_animator->setForceController(s_deviceConfig.networkForceController);
 
 #if defined(DEBUG_OVERLAY_ENABLED)
   s_debugOverlay.begin(s_display);

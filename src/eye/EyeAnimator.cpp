@@ -535,8 +535,8 @@ void EyeAnimator::processNetworkInput()
 {
   if (!m_sync)
     return;
-  if (m_input)
-    return; // controller device: local input always takes precedence
+  if (isController())
+    return; // controller device (local input or forceController): local state always takes precedence
 
   if (!m_sync->hasController())
   {

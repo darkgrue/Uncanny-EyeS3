@@ -56,6 +56,12 @@ public:
   void setSyncManager(EyeSyncManager *sync) { m_sync = sync; }
 
   /**
+   * @brief Force this device to broadcast as controller even without a local
+   * input device attached (e.g. two purely-autonomous devices syncing).
+   */
+  void setForceController(bool force) { m_forceController = force; }
+
+  /**
    * @brief Configure the light sensor pin for pupil control.
    * @param pin ADC pin number, or -1 to disable and use autonomous iris.
    * @param minVal Raw ADC value representing minimum (brightest) light.
@@ -89,8 +95,8 @@ public:
    */
   bool broadcastState();
 
-  /** @brief Returns true when a local input device (e.g. WiiChuck) is attached. */
-  bool isController() const { return m_input != nullptr; }
+  /** @brief Returns true when a local input device is attached or forceController is set. */
+  bool isController() const { return m_input != nullptr || m_forceController; }
 
   /** @brief Current eye X position (-1.0 to +1.0). */
   float getEyeX() const { return m_movement.getX(); }
@@ -188,6 +194,7 @@ private:
   InputBase *m_input = nullptr;     // Primary input source (e.g. WiiChuck)
   InputBase *m_faceInput = nullptr; // Secondary input source (e.g. GestureFace)
   EyeSyncManager *m_sync = nullptr; // ESP-NOW sync manager
+  bool m_forceController = false;  // Broadcast as controller even without m_input attached
 
   const EyeDefinition *m_eyeDef = nullptr; // Current eye definition
   int m_eyeIndex = 0;                      // Current eye registry index

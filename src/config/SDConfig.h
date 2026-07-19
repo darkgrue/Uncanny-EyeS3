@@ -20,10 +20,16 @@
  *     "key": "SharedPassphrase",
  *     "allowed_macs": [
  *       "AA:BB:CC:DD:EE:FF"
- *     ]
+ *     ],
+ *     "forceController": false
  *   }
  * }
  * @endcode
+ *
+ * "forceController" makes this device broadcast its state as an ESP-NOW
+ * controller even without a WiiChuck/gesture input attached, so two or more
+ * purely-autonomous devices can still sync. Set it on exactly one device in
+ * the group; the rest should leave it false (or omitted) so they follow.
  *
  * The "key" field accepts either a plain passphrase (up to 16 chars, zero-padded
  * to the required 16-byte ESP-NOW PMK width) or an exact 32 hex-digit string
@@ -57,6 +63,7 @@ struct DeviceConfig
   uint8_t  allowedMacs[SD_CONFIG_MAX_ALLOWED_MACS][6];  ///< Sender MAC allowlist
   int      allowedMacCount;                              ///< Number of entries in allowedMacs (0 = allow all)
   bool     displayUpsideDown;                            ///< Boot-time default: true = display mounted rotated 180°
+  bool     networkForceController;                       ///< true = broadcast as controller even without a WiiChuck/gesture input
 };
 
 /**

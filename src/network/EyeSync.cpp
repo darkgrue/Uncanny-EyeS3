@@ -10,6 +10,7 @@
  */
 #include "EyeSync.h"
 #include <Arduino.h>
+#include <esp_wifi.h>
 
 EyeSyncManager *EyeSyncManager::s_instance = nullptr;
 
@@ -33,6 +34,14 @@ bool EyeSyncManager::begin(uint8_t channel)
     return true;
 
   s_instance = this;
+
+  // esp_now_add_peer()'s peer_info.channel field is only used to validate
+  // against the radio's current channel — it does not move the radio there.
+  // Without this call the device stays on whatever channel WiFi last used
+  // (e.g. a previously-associated AP's channel cached in NVS), which can
+  // silently diverge from another device's channel even when both configs
+  // agree, so neither ever sees the other's ESP-NOW broadcasts.
+  esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
 
   if (esp_now_init() != ESP_OK)
   {

@@ -117,6 +117,10 @@ bool SDConfig::load(DeviceConfig &cfg, int csPin, int sckPin, int misoPin, int m
         Serial.printf("[SDConfig] WARNING: invalid MAC skipped: %s\n", macStr);
       }
     }
+
+    cfg.networkForceController = net["forceController"] | false;
+    if (cfg.networkForceController)
+      Serial.println("[SDConfig] Force controller enabled.");
   }
 
   cfg.loaded = true;
@@ -137,6 +141,7 @@ void SDConfig::applyDefaults(DeviceConfig &cfg)
   cfg.networkToken      = 0;
   cfg.allowedMacCount   = 0;
   cfg.displayUpsideDown = false;
+  cfg.networkForceController = false;
   memset(cfg.networkPmk,   0, sizeof(cfg.networkPmk));
   memset(cfg.allowedMacs,  0, sizeof(cfg.allowedMacs));
 }
