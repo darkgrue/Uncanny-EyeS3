@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python -c ' *)",
-      "Bash(where pio *)",
-      "Bash(python -m platformio --version)"
-    ]
-  }
-}
