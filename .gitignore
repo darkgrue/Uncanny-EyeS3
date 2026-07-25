@@ -38,5 +38,32 @@
 
 # End of https://www.toptal.com/developers/gitignore/api/platformio,visualstudiocode
 
+# AI Assistant & Workspace configurations
+.claude/
+.kilo/
+.cursor/
+.continue/
+
+# Superpowers Framework
+# Ignore Volatile Running States & Logs
+# Prevents inline batch checkpoints from filling up 'git status'
+docs/superpowers/plans/
+docs/superpowers/logs/
+.superpowers/
+
+# Ignore Subagent Swarm Hand-offs & Micro-states
+# Cleans up cross-agent messaging artifacts from parallel loops
+thoughts/shared/handoffs/
+*.tmp.plan
+*.execution-checkpoint
+
+# DO NOT IGNORE: Structural Context & System Rules
+# Force Git to track architectural goals so subagents don't hallucinate
+!docs/superpowers/specs/
+
 # Ignore prebuilt firmware binaries.
 esp-web-tools/firmware/*.bin
+
+# System & OS Files
+.DS_Store
+Thumbs.db

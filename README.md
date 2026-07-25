@@ -1,13 +1,17 @@
 # Uncanny-EyeS3
 
-A port of the [Adafruit M4 Eyes](https://github.com/adafruit/Adafruit_Learning_System_Guides/tree/main/M4_Eyes) project to the LilyGo T-Display S3 AMOLED and T-RGB, with ESP32-specific rendering optimizations, WiiChuck puppeteering, light-driven pupil control, Gesture & Face Detection Sensor support for gaze direction, and multi-device synchronization over ESP-NOW.
+A port of the [Adafruit M4 Eyes](https://github.com/adafruit/Adafruit_Learning_System_Guides/tree/main/M4_Eyes) project to the LilyGO T-Display S3 AMOLED and T-RGB, with ESP32-specific rendering optimizations, WiiChuck puppeteering, light-driven pupil control, Gesture & Face Detection Sensor support for gaze direction, and multi-device synchronization over ESP-NOW.
 
-This codebase is based on code and ideas from the following projects:
+This codebase draws on code and ideas from the following projects:
 
 &emsp;https://github.com/adafruit/Uncanny_Eyes  
 &emsp;https://github.com/adafruit/Adafruit_Learning_System_Guides/tree/main/M4_Eyes  
 &emsp;https://github.com/chrismiller/TeensyEyes  
 &emsp;https://github.com/MichaelMeissner/TeensyEyes/tree/meissner2  
+
+Large portions of this codebase were ported and adapted with the assistance of AI coding tools, based on the logic and structure of the above projects. Sincere thanks to Adafruit, Phillip Burgess, Chris Miller, Michael Meissner, and the respective maintainers and contributors for their original work and for making it freely available to the community.
+
+This project also includes a modified version of the LilyGO Arduino DriveBus Library, altered to correct functional issues.
 
 ---
 

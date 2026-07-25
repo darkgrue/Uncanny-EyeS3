@@ -123,3 +123,9 @@ Post-build:
 - `scripts/gen_display_tables_all.py` — auto-runs display table generation (equivalent to `tablegen.py -all`)
 
 The two post-build generator scripts mean the manual `tablegen.py` and `geneye.py` commands in the Build Commands section above are only needed outside of a normal build (e.g., when iterating on eye configs without a full rebuild).
+
+## Superpowers Operational Rules
+
+- **Artifact Cleanup**: When using Inline Execution Mode (`executing-plans`), automatically delete any `*.execution-checkpoint` or localized temporary scratchpads once a batch completes successfully.
+- **Plan File Policy**: Always default to reading from `docs/superpowers/specs/` for architectural truth. Do not let individual subagents modify the spec document without explicit confirmation.
+- **Git Hygiene**: Run `git status` after a subagent finishes a task to ensure it only modified the target implementation and test files, not infrastructure or temporary files.
