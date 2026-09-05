@@ -99,6 +99,7 @@ difference() {
                     translate([0, -3.5, 5 / 2 + 2])
                         cuboid([25 + 4, 22, 7], rounding = 3, except = [TOP,BOTTOM]);
 
+                    // interior cut
                     translate([0, -3.65, 7 / 2 - 0.25])
                         cuboid([25.5 + 1, 18 + 1, 7], rounding = 3, except = [TOP,BOTTOM]);
                 }
@@ -122,6 +123,7 @@ difference() {
                 translate([0, -3.5, -5 / 2 - 0.5])
                     cuboid([25 + 4, 22, 5 + 3], rounding = 3, except = [TOP,BOTTOM]);
 
+                // interior cut
                 translate([0, -3.65, -1])
                     cuboid([25.5 + 1, 18 + 1, 5 + 3], rounding = 3, except = [TOP,BOTTOM]);
             }
